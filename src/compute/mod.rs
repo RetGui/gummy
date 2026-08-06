@@ -1,4 +1,4 @@
-//! Low-level access to the layout algorithms themselves. For a higher-level API, see the [`TaffyTree`](crate::TaffyTree) struct.
+//! Low-level access to the layout algorithms themselves. For a higher-level API, see the [`GummyTree`](crate::GummyTree) struct.
 //!
 //! ### Layout functions
 //!
@@ -301,35 +301,35 @@ mod tests {
     use super::compute_hidden_layout;
     use crate::geometry::{Point, Size};
     use crate::style::{Display, Style};
-    use crate::TaffyTree;
+    use crate::GummyTree;
 
     #[test]
     fn hidden_layout_should_hide_recursively() {
-        let mut taffy: TaffyTree<()> = TaffyTree::new();
+        let mut gummy: GummyTree<()> = GummyTree::new();
 
         let style: Style = Style { display: Display::Flex, size: Size::from_lengths(50.0, 50.0), ..Default::default() };
 
-        let grandchild_00 = taffy.new_leaf(style.clone()).unwrap();
-        let grandchild_01 = taffy.new_leaf(style.clone()).unwrap();
-        let child_00 = taffy.new_with_children(style.clone(), &[grandchild_00, grandchild_01]).unwrap();
+        let grandchild_00 = gummy.new_leaf(style.clone()).unwrap();
+        let grandchild_01 = gummy.new_leaf(style.clone()).unwrap();
+        let child_00 = gummy.new_with_children(style.clone(), &[grandchild_00, grandchild_01]).unwrap();
 
-        let grandchild_02 = taffy.new_leaf(style.clone()).unwrap();
-        let child_01 = taffy.new_with_children(style.clone(), &[grandchild_02]).unwrap();
+        let grandchild_02 = gummy.new_leaf(style.clone()).unwrap();
+        let child_01 = gummy.new_with_children(style.clone(), &[grandchild_02]).unwrap();
 
-        let root = taffy
+        let root = gummy
             .new_with_children(
                 Style { display: Display::None, size: Size::from_lengths(50.0, 50.0), ..Default::default() },
                 &[child_00, child_01],
             )
             .unwrap();
 
-        compute_hidden_layout(&mut taffy.as_layout_tree(), root);
+        compute_hidden_layout(&mut gummy.as_layout_tree(), root);
 
         // Whatever size and display-mode the nodes had previously,
         // all layouts should resolve to ZERO due to the root's DISPLAY::NONE
 
         for node in [root, child_00, child_01, grandchild_00, grandchild_01, grandchild_02] {
-            let layout = taffy.layout(node).unwrap();
+            let layout = gummy.layout(node).unwrap();
             assert_eq!(layout.size, Size::zero());
             assert_eq!(layout.location, Point::zero());
         }

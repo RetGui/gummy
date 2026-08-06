@@ -1,8 +1,8 @@
 # Style Properties
 
-Y = Supported in spec and implemented in Taffy
-~Y = Implemented in Taffy, but not thoroughly tested
-N = Supported in spec but not implemented in Taffy
+Y = Supported in spec and implemented in Gummy
+~Y = Implemented in Gummy, but not thoroughly tested
+N = Supported in spec but not implemented in Gummy
 \- = Not applicable to layout mode
 1-5 = Priorities for a phased implementation of CSS Grid
 

@@ -1,21 +1,17 @@
-<!-- markdownlint-disable-next-line MD041 -->
-<p>
-<picture>
-  <img src="assets/logo.svg" alt="Taffy" height="70">
-</picture>
-</p>
+# Gummy
 
-[![GitHub CI](https://github.com/DioxusLabs/taffy/actions/workflows/ci.yml/badge.svg)](https://github.com/DioxusLabs/taffy/actions/workflows/ci.yml)
-[![crates.io](https://img.shields.io/crates/v/taffy.svg)](https://crates.io/crates/taffy)
-[![docs.rs](https://img.shields.io/docsrs/taffy)](https://docs.rs/taffy)
-![Crates.io MSRV](https://img.shields.io/crates/msrv/taffy)
+[![GitHub CI](https://github.com/RetGui/gummy/actions/workflows/ci.yml/badge.svg)](https://github.com/RetGui/gummy/actions/workflows/ci.yml)
+[![crates.io](https://img.shields.io/crates/v/gummy.svg)](https://crates.io/crates/gummy)
+[![docs.rs](https://img.shields.io/docsrs/gummy)](https://docs.rs/gummy)
+![Crates.io MSRV](https://img.shields.io/crates/msrv/gummy)
 
-Taffy is a flexible, high-performance, cross-platform UI layout library written in [Rust](https://www.rust-lang.org).
+Gummy is a flexible, high-performance, cross-platform UI layout library written in [Rust](https://www.rust-lang.org).
+
+Gummy is a fork of [Taffy](https://github.com/DioxusLabs/taffy). It builds on the work of Taffy's original authors and contributors; their authorship, license, changelog, and project history are retained in this repository.
 
 It currently implements the CSS **Block**, **Flexbox** and **CSS Grid** layout algorithms. Support for other paradigms is planned. For more information on this and other future development plans see the [roadmap issue](https://github.com/DioxusLabs/taffy/issues/345).
 
-This crate is a collaborative, cross-team project, and is designed to be used as a dependency for other UI and GUI libraries.
-Right now, it powers:
+The upstream Taffy crate is a collaborative, cross-team project designed to be used as a dependency for other UI and GUI libraries. It powers:
 
 - [Servo](https://github.com/servo/servo): an alternative web browser
 - [Blitz](https://github.com/DioxusLabs/blitz): a radically modular web engine
@@ -29,12 +25,12 @@ Right now, it powers:
 ## Usage
 
 ```rust
-use taffy::prelude::*;
+use gummy::prelude::*;
 
-// First create an instance of TaffyTree
-let mut tree : TaffyTree<()> = TaffyTree::new();
+// First create an instance of GummyTree
+let mut tree : GummyTree<()> = GummyTree::new();
 
-// Create a tree of nodes using `TaffyTree.new_leaf` and `TaffyTree.new_with_children`.
+// Create a tree of nodes using `GummyTree.new_leaf` and `GummyTree.new_with_children`.
 // These functions both return a node id which can be used to refer to that node
 // The Style struct is used to specify styling information
 let header_node = tree
@@ -68,17 +64,17 @@ let root_node = tree
 // Call compute_layout on the root of your tree to run the layout algorithm
 tree.compute_layout(root_node, Size::MAX_CONTENT).unwrap();
 
-// Inspect the computed layout using `TaffyTree.layout`
+// Inspect the computed layout using `GummyTree.layout`
 assert_eq!(tree.layout(root_node).unwrap().size.width, 800.0);
 assert_eq!(tree.layout(root_node).unwrap().size.height, 600.0);
 assert_eq!(tree.layout(header_node).unwrap().size.width, 800.0);
 assert_eq!(tree.layout(header_node).unwrap().size.height, 100.0);
 assert_eq!(tree.layout(body_node).unwrap().size.width, 800.0);
-assert_eq!(tree.layout(body_node).unwrap().size.height, 500.0); // This value was not set explicitly, but was computed by Taffy
+assert_eq!(tree.layout(body_node).unwrap().size.height, 500.0); // This value was not set explicitly, but was computed by Gummy
 
 ```
 
-## Bindings to other languages
+## Upstream bindings to other languages
 
 - Python via [stretchable](https://github.com/mortencombat/stretchable)
 - [WIP C bindings](https://github.com/DioxusLabs/taffy/pull/404)
@@ -86,7 +82,7 @@ assert_eq!(tree.layout(body_node).unwrap().size.height, 500.0); // This value wa
 
 ## Learning Resources
 
-Taffy implements the Flexbox and CSS Grid specifications faithfully, so documentation designed for the web should translate cleanly to Taffy's implementation. For reference documentation on individual style properties we recommend the MDN documentation (for example [this page](https://developer.mozilla.org/en-US/docs/Web/CSS/width) on the `width` property). Such pages can usually be found by searching for "MDN property-name" using a search engine.
+Gummy inherits Taffy's faithful implementations of the Flexbox and CSS Grid specifications, so documentation designed for the web should translate cleanly to Gummy's implementation. For reference documentation on individual style properties we recommend the MDN documentation (for example [this page](https://developer.mozilla.org/en-US/docs/Web/CSS/width) on the `width` property). Such pages can usually be found by searching for "MDN property-name" using a search engine.
 
 If you are interested in guide-level documentation on CSS layout, then we recommend the following resources:
 
@@ -105,7 +101,7 @@ If you are interested in guide-level documentation on CSS layout, then we recomm
 - Run on a 2021 MacBook Pro with M1 Pro processor using [criterion](https://github.com/bheisler/criterion.rs)
 - The benchmarks measure layout computation only. They do not measure tree creation.
 - Yoga benchmarks were run via the [yoga](https://github.com/bschwind/yoga-rs) crate (Rust bindings)
-- Most popular websites seem to have between 3,000 and 10,000 nodes (although they also require text layout, which neither yoga nor taffy implement).
+- Most popular websites seem to have between 3,000 and 10,000 nodes (although they also require text layout, which neither Yoga nor Taffy implement).
 
 Note that the table below contains multiple different units (milliseconds vs. microseconds)
 
@@ -125,8 +121,10 @@ Note that the table below contains multiple different units (milliseconds vs. mi
 [ba27f9d]: https://github.com/facebook/yoga/commit/ba27f9d1ecfa7518019845b84b035d3d4a2a6658
 [71027a8]: https://github.com/DioxusLabs/taffy/commit/71027a8de03b343e120852b84bb7dca9fb4651c5
 
+## Credits
+
+Gummy is derived from [Taffy](https://github.com/DioxusLabs/taffy), created and maintained by the authors and contributors credited in the package metadata and Git history. Taffy was itself forked from [Stretch](https://github.com/vislyhq/stretch). See [LICENSE.md](LICENSE.md) for the retained copyright and license terms.
+
 ## Contributions
 
-[Contributions welcome](https://github.com/DioxusLabs/taffy/blob/main/CONTRIBUTING.md):
-if you'd like to use, improve or build `taffy`, feel free to join the conversation, open an [issue](https://github.com/DioxusLabs/taffy/issues) or submit a [PR](https://github.com/DioxusLabs/taffy/pulls).
-If you have questions about how to use `taffy`, open a [discussion](https://github.com/DioxusLabs/taffy/discussions) so we can answer your questions in a way that others can find.
+[Contributions are welcome](CONTRIBUTING.md). If you'd like to use, improve, or build `gummy`, feel free to open an [issue](https://github.com/RetGui/gummy/issues) or submit a [pull request](https://github.com/RetGui/gummy/pulls).

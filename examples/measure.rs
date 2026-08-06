@@ -4,7 +4,7 @@ mod common {
 }
 use common::image::{image_measure_function, ImageContext};
 use common::text::{text_measure_function, FontMetrics, TextContext, WritingMode, LOREM_IPSUM};
-use taffy::prelude::*;
+use gummy::prelude::*;
 
 enum NodeContext {
     Text(TextContext),
@@ -12,8 +12,8 @@ enum NodeContext {
 }
 
 fn measure_function(
-    known_dimensions: taffy::geometry::Size<Option<f32>>,
-    available_space: taffy::geometry::Size<taffy::style::AvailableSpace>,
+    known_dimensions: gummy::geometry::Size<Option<f32>>,
+    available_space: gummy::geometry::Size<gummy::style::AvailableSpace>,
     node_context: Option<&mut NodeContext>,
     font_metrics: &FontMetrics,
 ) -> Size<f32> {
@@ -30,20 +30,20 @@ fn measure_function(
     }
 }
 
-fn main() -> Result<(), taffy::TaffyError> {
-    let mut taffy: TaffyTree<NodeContext> = TaffyTree::new();
+fn main() -> Result<(), gummy::GummyError> {
+    let mut gummy: GummyTree<NodeContext> = GummyTree::new();
 
     let font_metrics = FontMetrics { char_width: 10.0, char_height: 10.0 };
 
-    let text_node = taffy.new_leaf_with_context(
+    let text_node = gummy.new_leaf_with_context(
         Style::default(),
         NodeContext::Text(TextContext { text_content: LOREM_IPSUM.into(), writing_mode: WritingMode::Horizontal }),
     )?;
 
-    let image_node = taffy
+    let image_node = gummy
         .new_leaf_with_context(Style::default(), NodeContext::Image(ImageContext { width: 400.0, height: 300.0 }))?;
 
-    let root = taffy.new_with_children(
+    let root = gummy.new_with_children(
         Style {
             display: Display::Flex,
             flex_direction: FlexDirection::Column,
@@ -54,7 +54,7 @@ fn main() -> Result<(), taffy::TaffyError> {
     )?;
 
     // Compute layout and print result
-    taffy.compute_layout_with_measure(
+    gummy.compute_layout_with_measure(
         root,
         Size::MAX_CONTENT,
         // Note: this closure is a FnMut closure and can be used to borrow external context for the duration of layout
@@ -63,7 +63,7 @@ fn main() -> Result<(), taffy::TaffyError> {
             measure_function(known_dimensions, available_space, node_context, &font_metrics)
         },
     )?;
-    taffy.print_tree(root);
+    gummy.print_tree(root);
 
     Ok(())
 }

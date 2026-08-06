@@ -29,7 +29,7 @@ mod std {
 
     /// A string
     pub(crate) type String = std::string::String;
-    /// The default type for representing strings in Taffy styles
+    /// The default type for representing strings in Gummy styles
     pub(crate) type DefaultCheapStr = String;
     /// A map
     pub(crate) type Map<K, V> = std::collections::HashMap<K, V, std::collections::hash_map::RandomState>;
@@ -114,7 +114,7 @@ mod alloc {
 
     /// A string
     pub(crate) type String = alloc::string::String;
-    /// The default type for representing strings in Taffy styles
+    /// The default type for representing strings in Gummy styles
     pub(crate) type DefaultCheapStr = String;
     /// A map
     // TODO: consider using hashbrown
@@ -181,7 +181,7 @@ mod core {
 
     /// A string
     pub(crate) type String = &'static str;
-    /// The default type for representing strings in Taffy styles
+    /// The default type for representing strings in Gummy styles
     pub(crate) type DefaultCheapStr = &'static str;
 
     /// An allocation-backend agnostic vector type

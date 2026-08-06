@@ -1,4 +1,4 @@
-//! Taffy uses two coordinate systems to refer to grid lines (the gaps/gutters between rows/columns):
+//! Gummy uses two coordinate systems to refer to grid lines (the gaps/gutters between rows/columns):
 use super::super::types::TrackCounts;
 use crate::geometry::Line;
 use core::cmp::{max, Ordering};

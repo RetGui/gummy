@@ -4,8 +4,8 @@ mod common {
 }
 use common::image::{image_measure_function, ImageContext};
 use common::text::{text_measure_function, FontMetrics, TextContext, WritingMode, LOREM_IPSUM};
-use taffy::util::print_tree;
-use taffy::{
+use gummy::util::print_tree;
+use gummy::{
     compute_cached_layout, compute_flexbox_layout, compute_grid_layout, compute_leaf_layout, compute_root_layout,
     prelude::*, round_layout, Cache, CacheTree,
 };
@@ -120,7 +120,7 @@ impl Iterator for ChildIter<'_> {
     }
 }
 
-impl taffy::TraversePartialTree for Tree {
+impl gummy::TraversePartialTree for Tree {
     type ChildIter<'a> = ChildIter<'a>;
 
     fn child_ids(&self, node_id: NodeId) -> Self::ChildIter<'_> {
@@ -136,9 +136,9 @@ impl taffy::TraversePartialTree for Tree {
     }
 }
 
-impl taffy::TraverseTree for Tree {}
+impl gummy::TraverseTree for Tree {}
 
-impl taffy::LayoutPartialTree for Tree {
+impl gummy::LayoutPartialTree for Tree {
     type CustomIdent = String;
 
     type CoreContainerStyle<'a>
@@ -158,7 +158,7 @@ impl taffy::LayoutPartialTree for Tree {
         0.0
     }
 
-    fn compute_child_layout(&mut self, node_id: NodeId, inputs: taffy::tree::LayoutInput) -> taffy::tree::LayoutOutput {
+    fn compute_child_layout(&mut self, node_id: NodeId, inputs: gummy::tree::LayoutInput) -> gummy::tree::LayoutOutput {
         compute_cached_layout(self, node_id, inputs, |tree, node_id, inputs| {
             let node = &mut tree.nodes[usize::from(node_id)];
             let font_metrics = FontMetrics { char_width: 10.0, char_height: 10.0 };
@@ -193,11 +193,11 @@ impl taffy::LayoutPartialTree for Tree {
 }
 
 impl CacheTree for Tree {
-    fn cache_get(&self, node_id: NodeId, inputs: &taffy::LayoutInput) -> Option<taffy::LayoutOutput> {
+    fn cache_get(&self, node_id: NodeId, inputs: &gummy::LayoutInput) -> Option<gummy::LayoutOutput> {
         self.node_from_id(node_id).cache.get(inputs)
     }
 
-    fn cache_store(&mut self, node_id: NodeId, inputs: &taffy::LayoutInput, layout_output: taffy::LayoutOutput) {
+    fn cache_store(&mut self, node_id: NodeId, inputs: &gummy::LayoutInput, layout_output: gummy::LayoutOutput) {
         self.node_from_id_mut(node_id).cache.store(inputs, layout_output)
     }
 
@@ -206,7 +206,7 @@ impl CacheTree for Tree {
     }
 }
 
-impl taffy::LayoutFlexboxContainer for Tree {
+impl gummy::LayoutFlexboxContainer for Tree {
     type FlexboxContainerStyle<'a>
         = &'a Style
     where
@@ -226,7 +226,7 @@ impl taffy::LayoutFlexboxContainer for Tree {
     }
 }
 
-impl taffy::LayoutGridContainer for Tree {
+impl gummy::LayoutGridContainer for Tree {
     type GridContainerStyle<'a>
         = &'a Style
     where
@@ -246,7 +246,7 @@ impl taffy::LayoutGridContainer for Tree {
     }
 }
 
-impl taffy::RoundTree for Tree {
+impl gummy::RoundTree for Tree {
     fn get_unrounded_layout(&self, node_id: NodeId) -> Layout {
         self.node_from_id(node_id).unrounded_layout
     }
@@ -256,7 +256,7 @@ impl taffy::RoundTree for Tree {
     }
 }
 
-impl taffy::PrintTree for Tree {
+impl gummy::PrintTree for Tree {
     fn get_debug_label(&self, node_id: NodeId) -> &'static str {
         match self.node_from_id(node_id).kind {
             NodeKind::Flexbox => "FLEX",
@@ -271,7 +271,7 @@ impl taffy::PrintTree for Tree {
     }
 }
 
-fn main() -> Result<(), taffy::TaffyError> {
+fn main() -> Result<(), gummy::GummyError> {
     let mut tree = Tree::new();
 
     let root = Node::new_column(Style::DEFAULT);

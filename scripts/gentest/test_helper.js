@@ -311,9 +311,9 @@ function describeElement(e) {
       clientHeight: e.clientHeight,
     },
 
-    // The naive rounding can result in 1px gaps in the layout, so Taffy uses a smarter algorithm to avoid this.
+    // The naive rounding can result in 1px gaps in the layout, so Gummy uses a smarter algorithm to avoid this.
     // Chrome also uses a smarter algorithm, but it doesn't expose the output of that rounding.
-    // So we just emulate Taffy's computation here.
+    // So we just emulate Gummy's computation here.
     smartRoundedLayout: {
       width: Math.round(boundingRect.right) - Math.round(boundingRect.left),
       height: Math.round(boundingRect.bottom) - Math.round(boundingRect.top),

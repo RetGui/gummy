@@ -1,12 +1,12 @@
 [package]
-name = "taffy_test_helpers"
+name = "gummy_test_helpers"
 version = "0.0.0"
 edition = "2021"
-description = "Internal test helpers for taffy's tests"
-repository = "https://github.com/DioxusLabs/taffy"
+description = "Internal test helpers for gummy's tests"
+repository = "https://github.com/RetGui/gummy"
 categories = ["gui"]
 license = "MIT OR Apache-2.0"
 publish = false
 
 [dependencies]
-taffy = { path = "../.." }
+gummy = { path = "../.." }

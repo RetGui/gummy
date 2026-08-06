@@ -2,11 +2,11 @@
 // of false positives for this lint. So let's just disable it for this code.
 #![allow(dead_code)]
 
-pub mod taffy_helpers;
-pub use taffy_helpers::TaffyTreeBuilder;
+pub mod gummy_helpers;
+pub use gummy_helpers::GummyTreeBuilder;
 
-#[cfg(feature = "taffy03")]
-pub mod taffy_03_helpers;
+#[cfg(feature = "upstream03")]
+pub mod upstream_03_helpers;
 
 #[cfg(feature = "yoga")]
 pub mod yoga_helpers;
@@ -16,7 +16,7 @@ pub use yoga_helpers::YogaTreeBuilder;
 use rand::distr::uniform::SampleRange;
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha8Rng;
-use taffy::style::Style as TaffyStyle;
+use gummy::style::Style as GummyStyle;
 
 pub const STANDARD_RNG_SEED: u64 = 12345;
 
@@ -29,17 +29,17 @@ pub trait GenStyle<Style: Default>: Clone {
 }
 
 #[derive(Clone)]
-pub struct FixedStyleGenerator(pub TaffyStyle);
-impl GenStyle<TaffyStyle> for FixedStyleGenerator {
-    fn create_leaf_style(&mut self, _rng: &mut impl Rng) -> TaffyStyle {
+pub struct FixedStyleGenerator(pub GummyStyle);
+impl GenStyle<GummyStyle> for FixedStyleGenerator {
+    fn create_leaf_style(&mut self, _rng: &mut impl Rng) -> GummyStyle {
         self.0.clone()
     }
-    fn create_container_style(&mut self, _rng: &mut impl Rng) -> TaffyStyle {
+    fn create_container_style(&mut self, _rng: &mut impl Rng) -> GummyStyle {
         self.0.clone()
     }
 }
 
-pub trait BuildTree<R: Rng, G: GenStyle<TaffyStyle>> {
+pub trait BuildTree<R: Rng, G: GenStyle<GummyStyle>> {
     const NAME: &'static str;
     type Tree;
     type Node: Clone;
@@ -77,7 +77,7 @@ pub trait BuildTree<R: Rng, G: GenStyle<TaffyStyle>> {
     }
 }
 
-pub trait BuildTreeExt<G: GenStyle<TaffyStyle>>: BuildTree<ChaCha8Rng, G> {
+pub trait BuildTreeExt<G: GenStyle<GummyStyle>>: BuildTree<ChaCha8Rng, G> {
     fn with_seed(seed: u64, style_generator: G) -> Self
     where
         Self: Sized,

@@ -1,12 +1,12 @@
-//! The abstractions that make up the core of Taffy's low-level API
+//! The abstractions that make up the core of Gummy's low-level API
 //!
 //! ## Examples
 //!
-//! The following examples demonstrate end-to-end implementation of Taffy's traits and usage of the low-level compute APIs:
+//! The following examples demonstrate end-to-end implementation of Gummy's traits and usage of the low-level compute APIs:
 //!
-//!   - [custom_tree_vec](https://github.com/DioxusLabs/taffy/blob/main/examples/custom_tree_vec.rs) which implements a custom Taffy tree using a `Vec` as an arena with NodeId's being index's into the Vec.
-//!   - [custom_tree_owned_partial](https://github.com/DioxusLabs/taffy/blob/main/examples/custom_tree_owned_partial.rs) which implements a custom Taffy tree using directly owned children with NodeId's being index's into vec on parent node.
-//!   - [custom_tree_owned_unsafe](https://github.com/DioxusLabs/taffy/blob/main/examples/custom_tree_owned_unsafe.rs) which implements a custom Taffy tree using directly owned children with NodeId's being pointers.
+//!   - [custom_tree_vec](https://github.com/RetGui/gummy/blob/main/examples/custom_tree_vec.rs) which implements a custom Gummy tree using a `Vec` as an arena with NodeId's being index's into the Vec.
+//!   - [custom_tree_owned_partial](https://github.com/RetGui/gummy/blob/main/examples/custom_tree_owned_partial.rs) which implements a custom Gummy tree using directly owned children with NodeId's being index's into vec on parent node.
+//!   - [custom_tree_owned_unsafe](https://github.com/RetGui/gummy/blob/main/examples/custom_tree_owned_unsafe.rs) which implements a custom Gummy tree using directly owned children with NodeId's being pointers.
 //!
 //! ## Overview
 //!
@@ -33,14 +33,14 @@
 //! ## All of the traits on one page
 //!
 //! ### TraversePartialTree and TraverseTree
-//! These traits are Taffy's abstraction for downward tree traversal:
+//! These traits are Gummy's abstraction for downward tree traversal:
 //!  - [`TraversePartialTree`] allows access to a single container node, and it's immediate children. This is the only "traverse" trait that is required
-//!    for use of Taffy's core layout algorithms (flexbox, grid, etc).
+//!    for use of Gummy's core layout algorithms (flexbox, grid, etc).
 //!  - [`TraverseTree`] is a marker trait which uses the same API signature as `TraversePartialTree`, but extends it with a guarantee that the child/children methods can be used to recurse
 //!    infinitely down the tree. It is required by the `RoundTree` and
 //!    the `PrintTree` traits.
 //! ```rust
-//! # use taffy::*;
+//! # use gummy::*;
 //! pub trait TraversePartialTree {
 //!     /// Type representing an iterator of the children of a node
 //!     type ChildIter<'a>: Iterator<Item = NodeId>
@@ -60,7 +60,7 @@
 //! pub trait TraverseTree: TraversePartialTree {}
 //! ```
 //!
-//! You must implement [`TraversePartialTree`] to access any of Taffy's low-level API. If your tree implementation allows you to implement [`TraverseTree`] with
+//! You must implement [`TraversePartialTree`] to access any of Gummy's low-level API. If your tree implementation allows you to implement [`TraverseTree`] with
 //! the correct semantics (full recursive traversal is available) then you should.
 //!
 //! ### LayoutPartialTree
@@ -68,13 +68,13 @@
 //! **Requires:** `TraversePartialTree`<br />
 //! **Enables:** Flexbox, Grid, Block and Leaf layout algorithms from the [`crate::compute`] module
 //!
-//! Any type that implements [`LayoutPartialTree`] can be laid out using [Taffy's algorithms](crate::compute)
+//! Any type that implements [`LayoutPartialTree`] can be laid out using [Gummy's algorithms](crate::compute)
 //!
-//! Note that this trait extends [`TraversePartialTree`] (not [`TraverseTree`]). Taffy's algorithm implementations have been designed such that they can be used for a laying out a single
+//! Note that this trait extends [`TraversePartialTree`] (not [`TraverseTree`]). Gummy's algorithm implementations have been designed such that they can be used for a laying out a single
 //! node that only has access to it's immediate children.
 //!
 //! ```rust
-//! # use taffy::*;
+//! # use gummy::*;
 //! pub trait LayoutPartialTree: TraversePartialTree {
 //!     /// Get a reference to the [`Style`] for this node.
 //!     fn get_style(&self, node_id: NodeId) -> &Style;
@@ -100,7 +100,7 @@
 //! As indicated by it's dependence on `TraverseTree`, it required full recursive access to the tree.
 //!
 //! ```rust
-//! # use taffy::*;
+//! # use gummy::*;
 //! pub trait RoundTree: TraverseTree {
 //!     /// Get the node's unrounded layout
 //!     fn get_unrounded_layout(&self, node_id: NodeId) -> Layout;
@@ -117,7 +117,7 @@
 //! /// Trait used by the `print_tree` method which prints a debug representation
 //! ///
 //! /// As indicated by it's dependence on `TraverseTree`, it required full recursive access to the tree.
-//! # use taffy::*;
+//! # use gummy::*;
 //! pub trait PrintTree: TraverseTree {
 //!     /// Get a debug label for the node (typically the type of node: flexbox, grid, text, image, etc)
 //!     fn get_debug_label(&self, node_id: NodeId) -> &'static str;
@@ -142,7 +142,7 @@ use crate::{BlockContainerStyle, BlockContext, BlockItemStyle};
 #[cfg(all(feature = "grid", feature = "detailed_layout_info"))]
 use crate::compute::grid::DetailedGridInfo;
 
-/// Taffy's abstraction for downward tree traversal.
+/// Gummy's abstraction for downward tree traversal.
 ///
 /// However, this trait does *not* require access to any node's other than a single container node's immediate children unless you also intend to implement `TraverseTree`.
 pub trait TraversePartialTree {
@@ -167,9 +167,9 @@ pub trait TraversePartialTree {
 /// infinitely down the tree. Is required by the `RoundTree` and the `PrintTree` traits.
 pub trait TraverseTree: TraversePartialTree {}
 
-/// Any type that implements [`LayoutPartialTree`] can be laid out using [Taffy's algorithms](crate::compute)
+/// Any type that implements [`LayoutPartialTree`] can be laid out using [Gummy's algorithms](crate::compute)
 ///
-/// Note that this trait extends [`TraversePartialTree`] (not [`TraverseTree`]). Taffy's algorithm implementations have been designed such that they can be used for a laying out a single
+/// Note that this trait extends [`TraversePartialTree`] (not [`TraverseTree`]). Gummy's algorithm implementations have been designed such that they can be used for a laying out a single
 /// node that only has access to it's immediate children.
 pub trait LayoutPartialTree: TraversePartialTree {
     /// The style type representing the core container styles that all containers should have

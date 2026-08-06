@@ -1,6 +1,6 @@
-use taffy::prelude::*;
-use taffy::style_helpers::TaffyZero;
-use taffy_test_helpers::new_test_tree;
+use gummy::prelude::*;
+use gummy::style_helpers::GummyZero;
+use gummy_test_helpers::new_test_tree;
 
 fn arr_to_rect<T: Copy>(items: [T; 4]) -> Rect<T> {
     Rect { left: items[0], right: items[1], top: items[2], bottom: items[3] }
@@ -10,8 +10,8 @@ fn arr_to_rect<T: Copy>(items: [T; 4]) -> Rect<T> {
 #[ignore]
 fn border_on_a_single_axis_doesnt_increase_size() {
     for i in 0..4 {
-        let mut taffy = new_test_tree();
-        let node = taffy
+        let mut gummy = new_test_tree();
+        let node = gummy
             .new_leaf(Style {
                 border: {
                     let mut lengths = [LengthPercentage::ZERO; 4];
@@ -22,14 +22,14 @@ fn border_on_a_single_axis_doesnt_increase_size() {
             })
             .unwrap();
 
-        taffy
+        gummy
             .compute_layout(
                 node,
                 Size { width: AvailableSpace::Definite(100.0), height: AvailableSpace::Definite(100.0) },
             )
             .unwrap();
 
-        let layout = taffy.layout(node).unwrap();
+        let layout = gummy.layout(node).unwrap();
         assert_eq!(layout.size.width * layout.size.height, 0.);
     }
 }
@@ -38,8 +38,8 @@ fn border_on_a_single_axis_doesnt_increase_size() {
 #[ignore]
 fn padding_on_a_single_axis_doesnt_increase_size() {
     for i in 0..4 {
-        let mut taffy = new_test_tree();
-        let node = taffy
+        let mut gummy = new_test_tree();
+        let node = gummy
             .new_leaf(Style {
                 padding: {
                     let mut lengths = [LengthPercentage::ZERO; 4];
@@ -50,14 +50,14 @@ fn padding_on_a_single_axis_doesnt_increase_size() {
             })
             .unwrap();
 
-        taffy
+        gummy
             .compute_layout(
                 node,
                 Size { width: AvailableSpace::Definite(100.0), height: AvailableSpace::Definite(100.0) },
             )
             .unwrap();
 
-        let layout = taffy.layout(node).unwrap();
+        let layout = gummy.layout(node).unwrap();
         assert_eq!(layout.size.width * layout.size.height, 0.);
     }
 }
@@ -66,21 +66,21 @@ fn padding_on_a_single_axis_doesnt_increase_size() {
 #[ignore]
 fn border_and_padding_on_a_single_axis_doesnt_increase_size() {
     for i in 0..4 {
-        let mut taffy = new_test_tree();
+        let mut gummy = new_test_tree();
         let rect = {
             let mut lengths = [LengthPercentage::ZERO; 4];
             lengths[i] = LengthPercentage::from_length(10.);
             arr_to_rect(lengths)
         };
-        let node = taffy.new_leaf(Style { border: rect, padding: rect, ..Default::default() }).unwrap();
+        let node = gummy.new_leaf(Style { border: rect, padding: rect, ..Default::default() }).unwrap();
 
-        taffy
+        gummy
             .compute_layout(
                 node,
                 Size { width: AvailableSpace::Definite(100.0), height: AvailableSpace::Definite(100.0) },
             )
             .unwrap();
-        let layout = taffy.layout(node).unwrap();
+        let layout = gummy.layout(node).unwrap();
         assert_eq!(layout.size.width * layout.size.height, 0.);
     }
 }
@@ -88,9 +88,9 @@ fn border_and_padding_on_a_single_axis_doesnt_increase_size() {
 #[test]
 #[ignore]
 fn vertical_border_and_padding_percentage_values_use_available_space_correctly() {
-    let mut taffy = new_test_tree();
+    let mut gummy = new_test_tree();
 
-    let node = taffy
+    let node = gummy
         .new_leaf(Style {
             padding: Rect {
                 left: LengthPercentage::from_percent(1.0),
@@ -101,11 +101,11 @@ fn vertical_border_and_padding_percentage_values_use_available_space_correctly()
         })
         .unwrap();
 
-    taffy
+    gummy
         .compute_layout(node, Size { width: AvailableSpace::Definite(200.0), height: AvailableSpace::Definite(100.0) })
         .unwrap();
 
-    let layout = taffy.layout(node).unwrap();
+    let layout = gummy.layout(node).unwrap();
     assert_eq!(layout.size.width, 200.0);
     assert_eq!(layout.size.height, 200.0);
 }

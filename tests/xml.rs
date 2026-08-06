@@ -1,10 +1,10 @@
 use roxmltree::Document;
 use std::{fmt::Debug, io::Write, path::PathBuf, str::FromStr};
-use taffy::{
-    prelude::TaffyZero as _, AvailableSpace, CheapCloneStr, Dimension, GridAutoTracks, GridTemplateComponent,
-    GridTemplateTracks, LengthPercentage, LengthPercentageAuto, Line, NodeId, Point, PrintTree, Rect, Size, TaffyTree,
+use gummy::{
+    prelude::GummyZero as _, AvailableSpace, CheapCloneStr, Dimension, GridAutoTracks, GridTemplateComponent,
+    GridTemplateTracks, LengthPercentage, LengthPercentageAuto, Line, NodeId, Point, PrintTree, Rect, Size, GummyTree,
 };
-use taffy_test_helpers::{test_measure_function, TestNodeContext};
+use gummy_test_helpers::{test_measure_function, TestNodeContext};
 
 #[path = "./xml/mod.rs"]
 mod xml;
@@ -104,7 +104,7 @@ fn run_xml_test(group: &str, name: &str) {
     };
 
     // Construct tree and expectations
-    let mut tree = TaffyTree::<TestNodeContext>::new();
+    let mut tree = GummyTree::<TestNodeContext>::new();
     if use_rounding {
         tree.enable_rounding();
     } else {
@@ -138,8 +138,8 @@ fn run_xml_test(group: &str, name: &str) {
 fn construct_tree(
     input: roxmltree::Node,
     expected_x: roxmltree::Node,
-    tree: &mut TaffyTree<TestNodeContext>,
-    parent: Option<taffy::NodeId>,
+    tree: &mut GummyTree<TestNodeContext>,
+    parent: Option<gummy::NodeId>,
 ) -> OutputNode {
     if input.first_element_child().is_some() {
         let tnode = tree.new_with_children(build_style(input), &[]).unwrap();
@@ -189,7 +189,7 @@ fn maybe_parse<T: FromStr>(input: Option<&str>) -> Option<T> {
     input.and_then(|input| input.parse().ok())
 }
 
-fn get_computed_expectations(tree: &TaffyTree<TestNodeContext>, node_id: NodeId) -> OutputNode {
+fn get_computed_expectations(tree: &GummyTree<TestNodeContext>, node_id: NodeId) -> OutputNode {
     let layout = tree.get_final_layout(node_id);
     let mut output = OutputNode { node_id, location: layout.location, size: layout.size, children: Vec::new() };
 
@@ -215,13 +215,13 @@ fn build_expectations(xnode: roxmltree::Node, node_id: NodeId) -> OutputNode {
     }
 }
 
-fn build_style<S: CheapCloneStr>(xnode: roxmltree::Node) -> taffy::Style<S> {
+fn build_style<S: CheapCloneStr>(xnode: roxmltree::Node) -> gummy::Style<S> {
     let grid_template_rows: GridTemplateTracks<S, GridTemplateComponent<S>> =
         parse_or_default(xnode.attribute("grid-template-rows"));
     let grid_template_columns: GridTemplateTracks<S, GridTemplateComponent<S>> =
         parse_or_default(xnode.attribute("grid-template-columns"));
 
-    taffy::Style {
+    gummy::Style {
         dummy: std::marker::PhantomData,
         display: parse_or_default(xnode.attribute("display")),
         direction: parse_or_default(xnode.attribute("direction")),

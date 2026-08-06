@@ -2,7 +2,7 @@
 
 ## Unique Types
 
-`LayoutType` (corresponds to `Display` in Taffy):
+`LayoutType` (corresponds to `Display` in Gummy):
 
 ```rust
 enum LayoutType {
@@ -12,7 +12,7 @@ enum LayoutType {
 }
 ```
 
-`PositionType` (corresponds to `Position` in Taffy):
+`PositionType` (corresponds to `Position` in Gummy):
 
 ```rust
 pub enum PositionType {
@@ -21,14 +21,14 @@ pub enum PositionType {
 }
 ```
 
-`Units` (corresponds to `Dimension` in Taffy):
+`Units` (corresponds to `Dimension` in Gummy):
 
 ```rust
 pub enum Units {
     Pixels(f32), // = Dimension::Length
     Percentage(f32), // = Dimension::Percent
     Auto, // = Dimension::Auto
-    Stretch(f32), // No equivalent in Taffy!
+    Stretch(f32), // No equivalent in Gummy!
 }
 ```
 

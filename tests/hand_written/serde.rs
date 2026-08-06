@@ -2,7 +2,7 @@
 #[cfg(feature = "serde")]
 mod serde {
     use serde_json::{self, Value};
-    use taffy::style::Style;
+    use gummy::style::Style;
 
     #[test]
     fn serde_can_serialize() {

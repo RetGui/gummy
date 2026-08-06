@@ -3,12 +3,12 @@ use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
 use rand::prelude::*;
 use rand_chacha::ChaCha8Rng;
 use std::iter;
-use taffy::prelude::*;
-use taffy::style::Style;
+use gummy::prelude::*;
+use gummy::style::Style;
 
 /// Build a random leaf node
-fn build_random_leaf(taffy: &mut TaffyTree, _rng: &mut ChaCha8Rng) -> NodeId {
-    taffy.new_with_children(Style { size: length(20.0), ..Default::default() }, &[]).unwrap()
+fn build_random_leaf(gummy: &mut GummyTree, _rng: &mut ChaCha8Rng) -> NodeId {
+    gummy.new_with_children(Style { size: length(20.0), ..Default::default() }, &[]).unwrap()
 }
 
 fn random_grid_track<R: Rng>(rng: &mut R) -> GridTemplateComponent<String> {
@@ -40,8 +40,8 @@ fn random_nxn_grid_style<R: Rng>(rng: &mut R, track_count: usize) -> Style {
 }
 
 /// A tree with many children that have shallow depth
-fn build_grid_flat_hierarchy(col_count: usize, row_count: usize) -> (TaffyTree, NodeId) {
-    let mut taffy = TaffyTree::new();
+fn build_grid_flat_hierarchy(col_count: usize, row_count: usize) -> (GummyTree, NodeId) {
+    let mut gummy = GummyTree::new();
     let mut rng = ChaCha8Rng::seed_from_u64(12345);
 
     let style = Style {
@@ -52,19 +52,19 @@ fn build_grid_flat_hierarchy(col_count: usize, row_count: usize) -> (TaffyTree, 
     };
 
     let children: Vec<_> =
-        iter::from_fn(|| Some(build_random_leaf(&mut taffy, &mut rng))).take(col_count * row_count).collect();
+        iter::from_fn(|| Some(build_random_leaf(&mut gummy, &mut rng))).take(col_count * row_count).collect();
 
-    let root = taffy.new_with_children(style, children.as_slice()).unwrap();
-    (taffy, root)
+    let root = gummy.new_with_children(style, children.as_slice()).unwrap();
+    (gummy, root)
 }
 
 /// A helper function to recursively construct a deep tree
 pub fn build_deep_grid_tree(
-    tree: &mut TaffyTree,
+    tree: &mut GummyTree,
     levels: usize,
     track_count: usize,
-    create_leaf_node: &mut impl FnMut(&mut TaffyTree) -> NodeId,
-    create_container_node: &mut impl FnMut(&mut TaffyTree, Vec<NodeId>) -> NodeId,
+    create_leaf_node: &mut impl FnMut(&mut GummyTree) -> NodeId,
+    create_container_node: &mut impl FnMut(&mut GummyTree, Vec<NodeId>) -> NodeId,
 ) -> Vec<NodeId> {
     // The extra one is for a position:absolute child
     let child_count = track_count * track_count;
@@ -86,21 +86,21 @@ pub fn build_deep_grid_tree(
 }
 
 /// A tree with a higher depth for a more realistic scenario
-fn build_taffy_deep_grid_hierarchy(levels: usize, track_count: usize) -> (TaffyTree, NodeId) {
+fn build_gummy_deep_grid_hierarchy(levels: usize, track_count: usize) -> (GummyTree, NodeId) {
     let mut rng = ChaCha8Rng::seed_from_u64(12345);
-    let mut build_leaf_node = |taffy: &mut TaffyTree| build_random_leaf(taffy, &mut rng);
+    let mut build_leaf_node = |gummy: &mut GummyTree| build_random_leaf(gummy, &mut rng);
     let mut rng = ChaCha8Rng::seed_from_u64(12345);
-    let mut build_flex_node = |taffy: &mut TaffyTree, children: Vec<NodeId>| {
-        taffy.new_with_children(random_nxn_grid_style(&mut rng, track_count), &children).unwrap()
+    let mut build_flex_node = |gummy: &mut GummyTree, children: Vec<NodeId>| {
+        gummy.new_with_children(random_nxn_grid_style(&mut rng, track_count), &children).unwrap()
     };
 
-    let mut taffy = TaffyTree::new();
-    let tree = build_deep_grid_tree(&mut taffy, levels, track_count, &mut build_leaf_node, &mut build_flex_node);
-    let root = taffy.new_with_children(Style::DEFAULT, &tree).unwrap();
-    (taffy, root)
+    let mut gummy = GummyTree::new();
+    let tree = build_deep_grid_tree(&mut gummy, levels, track_count, &mut build_leaf_node, &mut build_flex_node);
+    let root = gummy.new_with_children(Style::DEFAULT, &tree).unwrap();
+    (gummy, root)
 }
 
-fn taffy_benchmarks(c: &mut Criterion) {
+fn gummy_benchmarks(c: &mut Criterion) {
     let mut group = c.benchmark_group("grid/wide");
     group.sample_size(10);
     for track_count in [31usize, 100, 316].iter() {
@@ -110,7 +110,7 @@ fn taffy_benchmarks(c: &mut Criterion) {
             |b, &track_count| {
                 b.iter_batched(
                     || build_grid_flat_hierarchy(track_count, track_count),
-                    |(mut taffy, root)| taffy.compute_layout(root, length(12000.0)).unwrap(),
+                    |(mut gummy, root)| gummy.compute_layout(root, length(12000.0)).unwrap(),
                     criterion::BatchSize::SmallInput,
                 )
             },
@@ -127,8 +127,8 @@ fn taffy_benchmarks(c: &mut Criterion) {
             &(*levels, *tracks),
             |b, &(levels, tracks)| {
                 b.iter_batched(
-                    || build_taffy_deep_grid_hierarchy(levels, tracks),
-                    |(mut taffy, root)| taffy.compute_layout(root, length(12000.0)).unwrap(),
+                    || build_gummy_deep_grid_hierarchy(levels, tracks),
+                    |(mut gummy, root)| gummy.compute_layout(root, length(12000.0)).unwrap(),
                     criterion::BatchSize::SmallInput,
                 )
             },
@@ -141,8 +141,8 @@ fn taffy_benchmarks(c: &mut Criterion) {
     for levels in [100, 1000].iter() {
         group.bench_with_input(BenchmarkId::new("1x1", levels), levels, |b, &levels| {
             b.iter_batched(
-                || build_taffy_deep_grid_hierarchy(levels, 1),
-                |(mut taffy, root)| taffy.compute_layout(root, max_content()).unwrap(),
+                || build_gummy_deep_grid_hierarchy(levels, 1),
+                |(mut gummy, root)| gummy.compute_layout(root, max_content()).unwrap(),
                 criterion::BatchSize::SmallInput,
             )
         });
@@ -150,5 +150,5 @@ fn taffy_benchmarks(c: &mut Criterion) {
     group.finish();
 }
 
-criterion_group!(benches, taffy_benchmarks);
+criterion_group!(benches, gummy_benchmarks);
 criterion_main!(benches);

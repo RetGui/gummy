@@ -2,7 +2,7 @@
 //!
 //! Layouts are composed of multiple nodes, which live in a tree-like data structure.
 
-#[cfg(feature = "taffy_tree")]
+#[cfg(feature = "gummy_tree")]
 use slotmap::{DefaultKey, Key, KeyData};
 
 /// A type representing the id of a single node in a tree of nodes
@@ -43,7 +43,7 @@ impl From<NodeId> for usize {
     }
 }
 
-#[cfg(feature = "taffy_tree")]
+#[cfg(feature = "gummy_tree")]
 impl From<DefaultKey> for NodeId {
     #[inline]
     fn from(key: DefaultKey) -> Self {
@@ -51,7 +51,7 @@ impl From<DefaultKey> for NodeId {
     }
 }
 
-#[cfg(feature = "taffy_tree")]
+#[cfg(feature = "gummy_tree")]
 impl From<NodeId> for DefaultKey {
     #[inline]
     fn from(key: NodeId) -> Self {

@@ -1,4 +1,4 @@
-use taffy::geometry::Size;
+use gummy::geometry::Size;
 
 pub struct ImageContext {
     pub width: f32,
@@ -6,9 +6,9 @@ pub struct ImageContext {
 }
 
 pub fn image_measure_function(
-    known_dimensions: taffy::geometry::Size<Option<f32>>,
+    known_dimensions: gummy::geometry::Size<Option<f32>>,
     image_context: &ImageContext,
-) -> taffy::geometry::Size<f32> {
+) -> gummy::geometry::Size<f32> {
     match (known_dimensions.width, known_dimensions.height) {
         (Some(width), Some(height)) => Size { width, height },
         (Some(width), None) => Size { width, height: (width / image_context.width) * image_context.height },

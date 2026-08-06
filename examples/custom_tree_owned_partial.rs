@@ -1,6 +1,6 @@
 //! ## Example: Partial Tree with Directly Owned Children
 //!
-//! The following example demonstrate an implementation of Taffy's Partial trait and usage of the low-level compute APIs.
+//! The following example demonstrate an implementation of Gummy's Partial trait and usage of the low-level compute APIs.
 //! This example uses directly owned children with NodeId's being index's into vec on parent node.
 //! Since an iterator created from a node can't access grandchildren, we are limited to only implement `TraversePartialTree`.
 //! See the [`crate::tree::traits`] module for more details about the low-level traits.
@@ -11,7 +11,7 @@ mod common {
 }
 use common::image::{image_measure_function, ImageContext};
 use common::text::{text_measure_function, FontMetrics, TextContext, WritingMode, LOREM_IPSUM};
-use taffy::{
+use gummy::{
     compute_cached_layout, compute_flexbox_layout, compute_grid_layout, compute_leaf_layout, compute_root_layout,
     prelude::*, Cache, CacheTree, Layout, Style,
 };
@@ -116,7 +116,7 @@ impl Iterator for ChildIter {
     }
 }
 
-impl taffy::TraversePartialTree for Node {
+impl gummy::TraversePartialTree for Node {
     type ChildIter<'a> = ChildIter;
 
     fn child_ids(&self, _node_id: NodeId) -> Self::ChildIter<'_> {
@@ -132,7 +132,7 @@ impl taffy::TraversePartialTree for Node {
     }
 }
 
-impl taffy::LayoutPartialTree for Node {
+impl gummy::LayoutPartialTree for Node {
     type CoreContainerStyle<'a>
         = &'a Style
     where
@@ -152,7 +152,7 @@ impl taffy::LayoutPartialTree for Node {
         0.0
     }
 
-    fn compute_child_layout(&mut self, node_id: NodeId, inputs: taffy::tree::LayoutInput) -> taffy::tree::LayoutOutput {
+    fn compute_child_layout(&mut self, node_id: NodeId, inputs: gummy::tree::LayoutInput) -> gummy::tree::LayoutOutput {
         compute_cached_layout(self, node_id, inputs, |parent, node_id, inputs| {
             let node = parent.node_from_id_mut(node_id);
             let font_metrics = FontMetrics { char_width: 10.0, char_height: 10.0 };
@@ -187,11 +187,11 @@ impl taffy::LayoutPartialTree for Node {
 }
 
 impl CacheTree for Node {
-    fn cache_get(&self, node_id: NodeId, inputs: &taffy::LayoutInput) -> Option<taffy::LayoutOutput> {
+    fn cache_get(&self, node_id: NodeId, inputs: &gummy::LayoutInput) -> Option<gummy::LayoutOutput> {
         self.node_from_id(node_id).cache.get(inputs)
     }
 
-    fn cache_store(&mut self, node_id: NodeId, inputs: &taffy::LayoutInput, layout_output: taffy::LayoutOutput) {
+    fn cache_store(&mut self, node_id: NodeId, inputs: &gummy::LayoutInput, layout_output: gummy::LayoutOutput) {
         self.node_from_id_mut(node_id).cache.store(inputs, layout_output)
     }
 
@@ -200,7 +200,7 @@ impl CacheTree for Node {
     }
 }
 
-impl taffy::LayoutFlexboxContainer for Node {
+impl gummy::LayoutFlexboxContainer for Node {
     type FlexboxContainerStyle<'a>
         = &'a Style
     where
@@ -220,7 +220,7 @@ impl taffy::LayoutFlexboxContainer for Node {
     }
 }
 
-impl taffy::LayoutGridContainer for Node {
+impl gummy::LayoutGridContainer for Node {
     type GridContainerStyle<'a>
         = &'a Style
     where
@@ -240,7 +240,7 @@ impl taffy::LayoutGridContainer for Node {
     }
 }
 
-fn main() -> Result<(), taffy::TaffyError> {
+fn main() -> Result<(), gummy::GummyError> {
     let mut root = Node::new_column(Style::DEFAULT);
 
     let text_node = Node::new_text(

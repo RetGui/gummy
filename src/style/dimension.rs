@@ -1,7 +1,7 @@
 //! Style types for representing lengths / sizes
 use super::CompactLength;
 use crate::geometry::Rect;
-use crate::style_helpers::{FromLength, FromPercent, TaffyAuto, TaffyZero};
+use crate::style_helpers::{FromLength, FromPercent, GummyAuto, GummyZero};
 #[cfg(feature = "parse")]
 use crate::util::parse::{from_str_from_css, CssParseResult, FromCss, Parser, Token};
 
@@ -11,7 +11,7 @@ use crate::util::parse::{from_str_from_css, CssParseResult, FromCss, Parser, Tok
 #[derive(Copy, Clone, PartialEq, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct LengthPercentage(pub(crate) CompactLength);
-impl TaffyZero for LengthPercentage {
+impl GummyZero for LengthPercentage {
     const ZERO: Self = Self(CompactLength::ZERO);
 }
 impl FromLength for LengthPercentage {
@@ -39,7 +39,7 @@ impl FromCss for LengthPercentage {
 from_str_from_css!(LengthPercentage);
 
 impl LengthPercentage {
-    /// An absolute length in some abstract units. Users of Taffy may define what they correspond
+    /// An absolute length in some abstract units. Users of Gummy may define what they correspond
     /// to in their application (pixels, logical pixels, mm, etc) as they see fit.
     #[inline(always)]
     pub const fn length(val: f32) -> Self {
@@ -100,10 +100,10 @@ impl<'de> serde::Deserialize<'de> for LengthPercentage {
 #[derive(Copy, Clone, PartialEq, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct LengthPercentageAuto(pub(crate) CompactLength);
-impl TaffyZero for LengthPercentageAuto {
+impl GummyZero for LengthPercentageAuto {
     const ZERO: Self = Self(CompactLength::ZERO);
 }
-impl TaffyAuto for LengthPercentageAuto {
+impl GummyAuto for LengthPercentageAuto {
     const AUTO: Self = Self(CompactLength::AUTO);
 }
 impl FromLength for LengthPercentageAuto {
@@ -137,7 +137,7 @@ impl FromCss for LengthPercentageAuto {
 from_str_from_css!(LengthPercentageAuto);
 
 impl LengthPercentageAuto {
-    /// An absolute length in some abstract units. Users of Taffy may define what they correspond
+    /// An absolute length in some abstract units. Users of Gummy may define what they correspond
     /// to in their application (pixels, logical pixels, mm, etc) as they see fit.
     #[inline(always)]
     pub const fn length(val: f32) -> Self {
@@ -227,10 +227,10 @@ impl<'de> serde::Deserialize<'de> for LengthPercentageAuto {
 #[derive(Copy, Clone, PartialEq, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct Dimension(pub(crate) CompactLength);
-impl TaffyZero for Dimension {
+impl GummyZero for Dimension {
     const ZERO: Self = Self(CompactLength::ZERO);
 }
-impl TaffyAuto for Dimension {
+impl GummyAuto for Dimension {
     const AUTO: Self = Self(CompactLength::AUTO);
 }
 impl FromLength for Dimension {
@@ -269,7 +269,7 @@ impl FromCss for Dimension {
 from_str_from_css!(Dimension);
 
 impl Dimension {
-    /// An absolute length in some abstract units. Users of Taffy may define what they correspond
+    /// An absolute length in some abstract units. Users of Gummy may define what they correspond
     /// to in their application (pixels, logical pixels, mm, etc) as they see fit.
     #[inline(always)]
     pub const fn length(val: f32) -> Self {

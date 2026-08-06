@@ -1,6 +1,6 @@
 //! Style type for representing available space as a sizing constraint
 use crate::{
-    prelude::{FromLength, TaffyMaxContent, TaffyMinContent, TaffyZero},
+    prelude::{FromLength, GummyMaxContent, GummyMinContent, GummyZero},
     sys::abs,
     Size,
 };
@@ -20,13 +20,13 @@ pub enum AvailableSpace {
     /// The amount of space available is indefinite and the node should be laid out under a max-content constraint
     MaxContent,
 }
-impl TaffyZero for AvailableSpace {
+impl GummyZero for AvailableSpace {
     const ZERO: Self = Self::Definite(0.0);
 }
-impl TaffyMaxContent for AvailableSpace {
+impl GummyMaxContent for AvailableSpace {
     const MAX_CONTENT: Self = Self::MaxContent;
 }
-impl TaffyMinContent for AvailableSpace {
+impl GummyMinContent for AvailableSpace {
     const MIN_CONTENT: Self = Self::MinContent;
 }
 impl FromLength for AvailableSpace {

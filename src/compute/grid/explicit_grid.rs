@@ -3,7 +3,7 @@
 use super::types::{GridTrack, GridTrackKind, TrackCounts};
 use crate::geometry::AbsoluteAxis;
 use crate::style::{LengthPercentage, RepetitionCount, TrackSizingFunction};
-use crate::style_helpers::TaffyAuto;
+use crate::style_helpers::GummyAuto;
 use crate::util::sys::{ceil, floor, Vec};
 use crate::util::MaybeMath;
 use crate::util::ResolveOrZero;

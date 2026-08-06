@@ -1,7 +1,7 @@
 //! Contains TrackCounts used to keep track of the number of tracks in the explicit and implicit grids.
 //! Also contains coordinate conversion functions which depend on those counts
 //!
-//! Taffy uses two coordinate systems to refer to grid lines (the gaps/gutters between rows/columns):
+//! Gummy uses two coordinate systems to refer to grid lines (the gaps/gutters between rows/columns):
 //!
 //!   "CSS Grid Line" coordinates are those used in grid-row/grid-column in the CSS grid spec:
 //!     - 0 is not a valid index
@@ -15,7 +15,7 @@
 //!     - The next line to the right (or down) is 1, and so on
 //!     - The next line to the left (or up) is -1, and so on
 //!
-//! Taffy also uses two coordinate systems to refer to grid tracks (rows/columns):
+//! Gummy also uses two coordinate systems to refer to grid tracks (rows/columns):
 //!
 //!   Both of these systems represent the entire implicit grid, not just the explicit grid.
 //!

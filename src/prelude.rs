@@ -8,8 +8,8 @@ pub use crate::{
         LengthPercentageAuto, Position, Style,
     },
     style_helpers::{
-        auto, fit_content, length, max_content, min_content, percent, zero, FromFr, FromLength, FromPercent, TaffyAuto,
-        TaffyFitContent, TaffyMaxContent, TaffyMinContent, TaffyZero,
+        auto, fit_content, length, max_content, min_content, percent, zero, FromFr, FromLength, FromPercent, GummyAuto,
+        GummyFitContent, GummyMaxContent, GummyMinContent, GummyZero,
     },
     tree::{Layout, LayoutPartialTree, NodeId, PrintTree, RoundTree, TraversePartialTree, TraverseTree},
 };
@@ -24,8 +24,8 @@ pub use crate::style::{
 };
 #[cfg(feature = "grid")]
 pub use crate::style_helpers::{
-    evenly_sized_tracks, flex, fr, line, minmax, repeat, span, TaffyGridLine, TaffyGridSpan,
+    evenly_sized_tracks, flex, fr, line, minmax, repeat, span, GummyGridLine, GummyGridSpan,
 };
 
-#[cfg(feature = "taffy_tree")]
-pub use crate::TaffyTree;
+#[cfg(feature = "gummy_tree")]
+pub use crate::GummyTree;

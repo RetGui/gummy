@@ -1,16 +1,16 @@
 //! This file includes benchmarks for very large, pseudo-randomly generated trees
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
 use rand::Rng;
-use taffy::prelude::*;
-use taffy::style::Dimension;
-use taffy::style::Style as TaffyStyle;
+use gummy::prelude::*;
+use gummy::style::Dimension;
+use gummy::style::Style as GummyStyle;
 
-use taffy_benchmarks::{BuildTreeExt, FixedStyleGenerator, GenStyle, TaffyTreeBuilder};
+use gummy_benchmarks::{BuildTreeExt, FixedStyleGenerator, GenStyle, GummyTreeBuilder};
 
-#[cfg(feature = "taffy03")]
-use taffy_benchmarks::taffy_03_helpers::Taffy03TreeBuilder;
+#[cfg(feature = "upstream03")]
+use gummy_benchmarks::upstream_03_helpers::Upstream03TreeBuilder;
 #[cfg(feature = "yoga")]
-use taffy_benchmarks::yoga_helpers::YogaTreeBuilder;
+use gummy_benchmarks::yoga_helpers::YogaTreeBuilder;
 
 fn random_dimension(rng: &mut impl Rng) -> Dimension {
     match rng.random_range(0.0..=1.0) {
@@ -22,12 +22,12 @@ fn random_dimension(rng: &mut impl Rng) -> Dimension {
 
 #[derive(Clone)]
 pub struct RandomStyleGenerator;
-impl GenStyle<TaffyStyle> for RandomStyleGenerator {
-    fn create_leaf_style(&mut self, rng: &mut impl Rng) -> TaffyStyle {
-        TaffyStyle { size: Size { width: random_dimension(rng), height: random_dimension(rng) }, ..Default::default() }
+impl GenStyle<GummyStyle> for RandomStyleGenerator {
+    fn create_leaf_style(&mut self, rng: &mut impl Rng) -> GummyStyle {
+        GummyStyle { size: Size { width: random_dimension(rng), height: random_dimension(rng) }, ..Default::default() }
     }
-    fn create_container_style(&mut self, rng: &mut impl Rng) -> TaffyStyle {
-        TaffyStyle { size: Size { width: random_dimension(rng), height: random_dimension(rng) }, ..Default::default() }
+    fn create_container_style(&mut self, rng: &mut impl Rng) -> GummyStyle {
+        GummyStyle { size: Size { width: random_dimension(rng), height: random_dimension(rng) }, ..Default::default() }
     }
 }
 
@@ -52,10 +52,10 @@ macro_rules! benchmark_each_library {
     ($benchmark_name: expr, $group: ident, $builder: ident, $params: expr, $generate_style: expr, $generate_tree: expr) => {
         #[cfg(feature = "yoga")]
         run_benchmark!(YogaTreeBuilder<_, _>, "Yoga", $benchmark_name, $group, $builder, $params, $generate_style, $generate_tree);
-        #[cfg(feature = "taffy03")]
-        run_benchmark!(Taffy03TreeBuilder<_, _>, "Taffy 0.3", $benchmark_name, $group, $builder, $params, $generate_style, $generate_tree);
+        #[cfg(feature = "upstream03")]
+        run_benchmark!(Upstream03TreeBuilder<_, _>, "Taffy 0.3", $benchmark_name, $group, $builder, $params, $generate_style, $generate_tree);
 
-        run_benchmark!(TaffyTreeBuilder<_, _>, "Taffy 0.7", $benchmark_name, $group, $builder, $params, $generate_style, $generate_tree);
+        run_benchmark!(GummyTreeBuilder<_, _>, "Gummy 0.7", $benchmark_name, $group, $builder, $params, $generate_style, $generate_tree);
     };
 }
 
@@ -165,13 +165,13 @@ fn super_deep_benchmarks(c: &mut Criterion) {
 
     #[derive(Clone)]
     struct SuperDeepStyleGen;
-    impl GenStyle<TaffyStyle> for SuperDeepStyleGen {
-        fn create_leaf_style(&mut self, _rng: &mut impl Rng) -> TaffyStyle {
+    impl GenStyle<GummyStyle> for SuperDeepStyleGen {
+        fn create_leaf_style(&mut self, _rng: &mut impl Rng) -> GummyStyle {
             // let flex_direction = if rng.gen::<f32>() < 0.5 { FlexDirection::Column } else { FlexDirection::Row };
             let flex_direction = FlexDirection::Row;
             Style { flex_direction, flex_grow: 1.0, margin: length(10.0), ..Default::default() }
         }
-        fn create_container_style(&mut self, rng: &mut impl Rng) -> TaffyStyle {
+        fn create_container_style(&mut self, rng: &mut impl Rng) -> GummyStyle {
             self.create_leaf_style(rng)
         }
     }
@@ -192,10 +192,10 @@ fn super_deep_benchmarks(c: &mut Criterion) {
             || SuperDeepStyleGen,
             builder.build_super_deep_hierarchy(*depth, 3)
         );
-        #[cfg(feature = "taffy03")]
+        #[cfg(feature = "upstream03")]
         run_benchmark!(
-            Taffy03TreeBuilder<_,_>,
-            "Taffy 0.3",
+            Upstream03TreeBuilder<_,_>,
+            "Gummy 0.3",
             "",
             group,
             builder,
@@ -205,8 +205,8 @@ fn super_deep_benchmarks(c: &mut Criterion) {
         );
 
         run_benchmark!(
-            TaffyTreeBuilder<_,_>,
-            "Taffy 0.7",
+            GummyTreeBuilder<_,_>,
+            "Gummy 0.7",
             "",
             group,
             builder,
@@ -218,7 +218,7 @@ fn super_deep_benchmarks(c: &mut Criterion) {
     group.finish();
 }
 
-fn taffy_benchmarks(c: &mut Criterion) {
+fn gummy_benchmarks(c: &mut Criterion) {
     huge_nested_benchmarks(c);
     wide_benchmarks(c);
     deep_auto_benchmarks(c);
@@ -226,5 +226,5 @@ fn taffy_benchmarks(c: &mut Criterion) {
     super_deep_benchmarks(c);
 }
 
-criterion_group!(benches, taffy_benchmarks);
+criterion_group!(benches, gummy_benchmarks);
 criterion_main!(benches);

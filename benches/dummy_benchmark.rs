@@ -4,7 +4,7 @@
 
 fn main() {
     eprintln!();
-    eprintln!("Error: Taffy's benchmarks are contained in a separate crate");
+    eprintln!("Error: Gummy's benchmarks are contained in a separate crate");
     eprintln!("Please run 'cargo bench' from within the 'benches' directory, or use the alias 'cargo xbench'");
     eprintln!();
     std::process::exit(1);

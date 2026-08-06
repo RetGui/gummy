@@ -1,16 +1,16 @@
 [package]
-name = "taffy"
+name = "gummy"
 version = "0.12.1"
 authors = [
     "Alice Cecile <alice.i.cecile@gmail.com>",
     "Johnathan Kelley <jkelleyrtp@gmail.com>",
     "Nico Burns <nico@nicoburns.com>",
 ]
-edition = "2021"
-rust-version = "1.71"
+edition = "2024"
+rust-version = "1.97"
 include = ["src/**/*", "examples/**/*", "Cargo.toml", "README.md"]
 description = "A flexible UI layout library "
-repository = "https://github.com/DioxusLabs/taffy"
+repository = "https://github.com/RetGui/gummy"
 keywords = ["cross-platform", "layout", "flexbox", "css-grid", "grid"]
 categories = ["gui"]
 license = "MIT"
@@ -35,7 +35,7 @@ rustdoc-args = ["--cfg", "docsrs"]
 [features]
 default = [
     "std",
-    "taffy_tree",
+    "gummy_tree",
     "flexbox",
     "grid",
     "block_layout",
@@ -60,27 +60,27 @@ grid = ["alloc", "dep:grid"]
 calc = []
 ## Causes all algorithms to compute and output a content size for each node
 content_size = []
-## Causes algorithms to stores detailed information of the nodes in TaffyTree, with only CSS Grid supporting this.
+## Causes algorithms to stores detailed information of the nodes in GummyTree, with only CSS Grid supporting this.
 detailed_layout_info = []
 ## Use strict provenance APIs for pointer manipulation. Using this feature requires Rust 1.84 or higher.
 strict_provenance = []
 
-#! ### Taffy Tree
+#! ### Gummy Tree
 
-## Enable the built-in Taffy node tree. See [`TaffyTree`](crate::TaffyTree).
-taffy_tree = ["dep:slotmap"]
+## Enable the built-in Gummy node tree. See [`GummyTree`](crate::GummyTree).
+gummy_tree = ["dep:slotmap"]
 
 #! ### Other
 
 ## Add [`serde`] derives to Style structs
 serde = ["dep:serde"]
-## Implement `FromStr` trait for Taffy style types
+## Implement `FromStr` trait for Gummy style types
 parse = ["dep:cssparser"]
 ## Enable the `parse` feature with proc-macro dependent optimisations
 parse_faster = ["parse", "cssparser/fast_match_byte"]
-## Allow Taffy to depend on the [`Rust Standard Library`](std)
+## Allow Gummy to depend on the [`Rust Standard Library`](std)
 std = ["grid?/std", "serde?/std", "slotmap?/std"]
-## Allow Taffy to depend on the alloc library
+## Allow Gummy to depend on the alloc library
 alloc = ["serde?/alloc"]
 ## Internal feature for debugging
 debug = ["std"]
@@ -90,10 +90,10 @@ profile = ["std"]
 [dev-dependencies]
 serde_json = "1.0.93"
 roxmltree = "0.21.1"
-taffy_test_helpers = { path = "tests/common"}
+gummy_test_helpers = { path = "tests/common"}
 
 # Enable default features for tests and examples
-taffy = { path = ".", features = ["parse"] }
+gummy = { path = ".", features = ["parse"] }
 
 [profile.release]
 lto = true

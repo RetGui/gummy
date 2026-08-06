@@ -5,9 +5,9 @@ mod common {
 
 use common::image::{image_measure_function, ImageContext};
 use common::text::{text_measure_function, FontMetrics, TextContext, WritingMode, LOREM_IPSUM};
-use taffy::tree::Cache;
-use taffy::util::print_tree;
-use taffy::{
+use gummy::tree::Cache;
+use gummy::util::print_tree;
+use gummy::{
     compute_cached_layout, compute_flexbox_layout, compute_grid_layout, compute_leaf_layout, compute_root_layout,
     prelude::*, round_layout, CacheTree,
 };
@@ -150,7 +150,7 @@ impl LayoutPartialTree for StatelessLayoutTree {
         0.0
     }
 
-    fn compute_child_layout(&mut self, node_id: NodeId, inputs: taffy::tree::LayoutInput) -> taffy::tree::LayoutOutput {
+    fn compute_child_layout(&mut self, node_id: NodeId, inputs: gummy::tree::LayoutInput) -> gummy::tree::LayoutOutput {
         compute_cached_layout(self, node_id, inputs, |tree, node_id, inputs| {
             let node = unsafe { node_from_id_mut(node_id) };
             let font_metrics = FontMetrics { char_width: 10.0, char_height: 10.0 };
@@ -185,11 +185,11 @@ impl LayoutPartialTree for StatelessLayoutTree {
 }
 
 impl CacheTree for StatelessLayoutTree {
-    fn cache_get(&self, node_id: NodeId, inputs: &taffy::LayoutInput) -> Option<taffy::LayoutOutput> {
+    fn cache_get(&self, node_id: NodeId, inputs: &gummy::LayoutInput) -> Option<gummy::LayoutOutput> {
         unsafe { node_from_id(node_id) }.cache.get(inputs)
     }
 
-    fn cache_store(&mut self, node_id: NodeId, inputs: &taffy::LayoutInput, layout_output: taffy::LayoutOutput) {
+    fn cache_store(&mut self, node_id: NodeId, inputs: &gummy::LayoutInput, layout_output: gummy::LayoutOutput) {
         unsafe { node_from_id_mut(node_id) }.cache.store(inputs, layout_output)
     }
 
@@ -198,7 +198,7 @@ impl CacheTree for StatelessLayoutTree {
     }
 }
 
-impl taffy::LayoutFlexboxContainer for StatelessLayoutTree {
+impl gummy::LayoutFlexboxContainer for StatelessLayoutTree {
     type FlexboxContainerStyle<'a>
         = &'a Style
     where
@@ -218,7 +218,7 @@ impl taffy::LayoutFlexboxContainer for StatelessLayoutTree {
     }
 }
 
-impl taffy::LayoutGridContainer for StatelessLayoutTree {
+impl gummy::LayoutGridContainer for StatelessLayoutTree {
     type GridContainerStyle<'a>
         = &'a Style
     where
@@ -263,7 +263,7 @@ impl PrintTree for StatelessLayoutTree {
     }
 }
 
-fn main() -> Result<(), taffy::TaffyError> {
+fn main() -> Result<(), gummy::GummyError> {
     let mut root = Node::new_column(Style::DEFAULT);
 
     let text_node = Node::new_text(

@@ -1,13 +1,13 @@
 [package]
-name = "taffy_benchmarks"
+name = "gummy_benchmarks"
 version = "0.1.0"
 authors = [
     "Alice Cecile <alice.i.cecile@gmail.com>",
     "Johnathan Kelley <jkelleyrtp@gmail.com>",
 ]
 edition = "2021"
-description = "Benchmarks for the taffy crate"
-repository = "https://github.com/DioxusLabs/taffy"
+description = "Benchmarks for the gummy crate"
+repository = "https://github.com/RetGui/gummy"
 keywords = ["cross-platform", "layout", "benchmarks"]
 categories = ["gui", "benchmarks"]
 license = "MIT"
@@ -16,8 +16,8 @@ license = "MIT"
 criterion = "0.7"
 rand = { version = "0.9" }
 rand_chacha = "0.9"
-taffy = { path = ".." }
-taffy_03 = { package = "taffy", version = "0.3", optional = true }
+gummy = { path = ".." }
+upstream_03 = { package = "taffy", version = "0.3", optional = true }
 yoga = { version = "0.5.0", optional = true }
 ordered-float = { version = "4", optional = true }
 slotmap = { version = "1.0.6", optional = true }
@@ -26,9 +26,9 @@ parley = "0.7"
 [features]
 yoga = ["dep:yoga", "dep:slotmap", "dep:ordered-float"]
 yoga-super-deep = ["yoga"]
-taffy03 = ["dep:taffy_03"]
-content_size = ["taffy/content_size"]
-strict_provenance = ["taffy/strict_provenance"]
+upstream03 = ["dep:upstream_03"]
+content_size = ["gummy/content_size"]
+strict_provenance = ["gummy/strict_provenance"]
 small = []
 large = []
 

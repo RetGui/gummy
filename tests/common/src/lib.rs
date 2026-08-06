@@ -1,10 +1,10 @@
-use taffy::{AvailableSpace, NodeId, Size, Style, TaffyTree};
+use gummy::{AvailableSpace, NodeId, Size, Style, GummyTree};
 
-/// Creates a `TaffyTree` that uses `TestNodeContext`. The purpose of this function is
-/// to allow `TaffyTree` to be monomophised once in this crate rather than separately for
+/// Creates a `GummyTree` that uses `TestNodeContext`. The purpose of this function is
+/// to allow `GummyTree` to be monomophised once in this crate rather than separately for
 /// each test crate.
-pub fn new_test_tree() -> TaffyTree<TestNodeContext> {
-    TaffyTree::new()
+pub fn new_test_tree() -> GummyTree<TestNodeContext> {
+    GummyTree::new()
 }
 
 /// A sharednode context for tests which means that tests compiled with separate crates
@@ -137,11 +137,11 @@ pub struct AhemTextMeasureData {
 impl AhemTextMeasureData {
     fn measure(
         &self,
-        known_dimensions: taffy::Size<Option<f32>>,
-        available_space: taffy::Size<taffy::AvailableSpace>,
-    ) -> taffy::Size<f32> {
-        use taffy::prelude::*;
-        use taffy::AbsoluteAxis;
+        known_dimensions: gummy::Size<Option<f32>>,
+        available_space: gummy::Size<gummy::AvailableSpace>,
+    ) -> gummy::Size<f32> {
+        use gummy::prelude::*;
+        use gummy::AbsoluteAxis;
 
         const ZWS: char = '\u{200B}';
         const H_WIDTH: f32 = 10.0;

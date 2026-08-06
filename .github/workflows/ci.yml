@@ -14,8 +14,8 @@ env:
 
 jobs:
   # MSRV check.
-  # Taffy only guarantees "latest stable". However we have this check here to ensure that we advertise
-  # our MSRV. We also make an effort not to increase MSRV in patch versions of Taffy.
+  # Gummy only guarantees "latest stable". However we have this check here to ensure that we advertise
+  # our MSRV. We also make an effort not to increase MSRV in patch versions of Gummy.
   #
   # We only run `cargo build` (not `cargo test`) so as to avoid requiring dev-dependencies to build with the MSRV
   # version. Building is likely sufficient as runtime errors varying between rust versions is very unlikely.
@@ -63,7 +63,7 @@ jobs:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       - run: cargo build --no-default-features
-      - run: cargo test --tests --no-default-features --features taffy_tree
+      - run: cargo test --tests --no-default-features --features gummy_tree
 
   # Default
   test-features-default:
@@ -121,8 +121,8 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
-      - run: cargo build --no-default-features --features std,taffy_tree,grid,flexbox,block_layout
-      - run: cargo test --tests --no-default-features --features std,taffy_tree,grid,flexbox,block_layout,calc
+      - run: cargo build --no-default-features --features std,gummy_tree,grid,flexbox,block_layout
+      - run: cargo test --tests --no-default-features --features std,gummy_tree,grid,flexbox,block_layout,calc
 
   test-features-default-except-calc:
     name: "Test Suite [default except calc]"
@@ -130,8 +130,8 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
-      - run: cargo build --no-default-features --features std,taffy_tree,grid,flexbox,block_layout
-      - run: cargo test --tests --no-default-features --features std,taffy_tree,grid,flexbox,block_layout
+      - run: cargo build --no-default-features --features std,gummy_tree,grid,flexbox,block_layout
+      - run: cargo test --tests --no-default-features --features std,gummy_tree,grid,flexbox,block_layout
 
   test-features-no-grid-nor-flexbox:
     name: "Test Suite [std (no algorithms)]"
@@ -140,8 +140,8 @@ jobs:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       - run: cargo build --no-default-features --features std
-      - run: cargo build --no-default-features --features std,taffy_tree
-      - run: cargo test --tests --no-default-features --features std,taffy_tree,calc
+      - run: cargo build --no-default-features --features std,gummy_tree
+      - run: cargo test --tests --no-default-features --features std,gummy_tree,calc
 
   # With std feature
   test-features-flexbox:
@@ -151,8 +151,8 @@ jobs:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       - run: cargo build --no-default-features --features flexbox,std
-      - run: cargo build --no-default-features --features flexbox,std,taffy_tree
-      - run: cargo test --tests --no-default-features --features flexbox,std,taffy_tree
+      - run: cargo build --no-default-features --features flexbox,std,gummy_tree
+      - run: cargo test --tests --no-default-features --features flexbox,std,gummy_tree
 
   test-features-grid:
     name: "Test Suite [std + grid]"
@@ -161,8 +161,8 @@ jobs:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       - run: cargo build --no-default-features --features grid,std
-      - run: cargo build --no-default-features --features grid,std,taffy_tree
-      - run: cargo test --tests --no-default-features --features grid,std,taffy_tree
+      - run: cargo build --no-default-features --features grid,std,gummy_tree
+      - run: cargo test --tests --no-default-features --features grid,std,gummy_tree
 
   test-features-block:
     name: "Test Suite [std + block)]"
@@ -171,8 +171,8 @@ jobs:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       - run: cargo build --no-default-features --features block_layout,std
-      - run: cargo build --no-default-features --features block_layout,std,taffy_tree
-      - run: cargo test --tests --no-default-features --features block_layout,std,taffy_tree
+      - run: cargo build --no-default-features --features block_layout,std,gummy_tree
+      - run: cargo test --tests --no-default-features --features block_layout,std,gummy_tree
 
   # With detailed layout info
   test-features-grid-detailed-info:
@@ -182,8 +182,8 @@ jobs:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       - run: cargo build --no-default-features --features grid,detailed_layout_info,std
-      - run: cargo build --no-default-features --features grid,detailed_layout_info,std,taffy_tree
-      - run: cargo test --tests --no-default-features --features grid,detailed_layout_info,std,taffy_tree
+      - run: cargo build --no-default-features --features grid,detailed_layout_info,std,gummy_tree
+      - run: cargo test --tests --no-default-features --features grid,detailed_layout_info,std,gummy_tree
 
   # With detailed layout info
   test-features-flex-detailed-info:
@@ -193,8 +193,8 @@ jobs:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       - run: cargo build --no-default-features --features flexbox,detailed_layout_info,std
-      - run: cargo build --no-default-features --features flexbox,detailed_layout_info,std,taffy_tree
-      - run: cargo test --tests --no-default-features --features flexbox,detailed_layout_info,std,taffy_tree
+      - run: cargo build --no-default-features --features flexbox,detailed_layout_info,std,gummy_tree
+      - run: cargo test --tests --no-default-features --features flexbox,detailed_layout_info,std,gummy_tree
 
   # With alloc feature
 
@@ -205,8 +205,8 @@ jobs:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       - run: cargo build --no-default-features --features alloc
-      - run: cargo build --no-default-features --features alloc,taffy_tree
-      - run: cargo test --tests --no-default-features --features alloc,taffy_tree
+      - run: cargo build --no-default-features --features alloc,gummy_tree
+      - run: cargo test --tests --no-default-features --features alloc,gummy_tree
 
   test-features-alloc:
     name: "Test Suite [alloc + all algorithms]"
@@ -215,8 +215,8 @@ jobs:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       - run: cargo build --no-default-features --features alloc,grid,flexbox,block_layout
-      - run: cargo build --no-default-features --features alloc,grid,flexbox,block_layout,taffy_tree
-      - run: cargo test --tests  --no-default-features --features alloc,grid,flexbox,block_layout,taffy_tree
+      - run: cargo build --no-default-features --features alloc,grid,flexbox,block_layout,gummy_tree
+      - run: cargo test --tests  --no-default-features --features alloc,grid,flexbox,block_layout,gummy_tree
 
   fmt:
     name: Rustfmt

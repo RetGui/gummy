@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-use taffy::{AvailableSpace, NodeId, Size, Style};
+use gummy::{AvailableSpace, NodeId, Size, Style};
 
 /// A shared measure function for tests which means that tests compiled with separate crates
 /// and using different styles of measure function. This saves on compile time when running tests.
@@ -118,11 +118,11 @@ pub struct AhemTextMeasureData {
 impl AhemTextMeasureData {
     fn measure(
         &self,
-        known_dimensions: taffy::Size<Option<f32>>,
-        available_space: taffy::Size<taffy::AvailableSpace>,
-    ) -> taffy::Size<f32> {
-        use taffy::prelude::*;
-        use taffy::AbsoluteAxis;
+        known_dimensions: gummy::Size<Option<f32>>,
+        available_space: gummy::Size<gummy::AvailableSpace>,
+    ) -> gummy::Size<f32> {
+        use gummy::prelude::*;
+        use gummy::AbsoluteAxis;
 
         const ZWS: char = '\u{200B}';
         const H_WIDTH: f32 = 10.0;

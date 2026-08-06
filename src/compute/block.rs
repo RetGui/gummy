@@ -1,7 +1,7 @@
 //! Computes the CSS block layout algorithm in the case that the block container being laid out contains only block-level boxes
 use crate::geometry::{Line, Point, Rect, Size};
 use crate::style::{AvailableSpace, CoreStyle, LengthPercentageAuto, Overflow, Position};
-use crate::style_helpers::TaffyMaxContent;
+use crate::style_helpers::GummyMaxContent;
 use crate::tree::{CollapsibleMarginSet, Layout, LayoutInput, LayoutOutput, RunMode, SizingMode};
 use crate::tree::{LayoutPartialTree, LayoutPartialTreeExt, NodeId};
 use crate::util::debug::debug_log;
@@ -760,7 +760,7 @@ fn perform_final_layout_on_in_flow_children(
         container_percentage_resolution_height.maybe_sub(resolved_content_box_inset.vertical_axis_sum());
     let parent_size = Size { width: Some(container_inner_width), height: container_percentage_resolution_height };
     // Vertical available space in block flow is indefinite, NOT a min-content
-    // constraint: MaxContent is taffy's representation of "indefinite".
+    // constraint: MaxContent is gummy's representation of "indefinite".
     // Passing MinContent here made every descendant grid believe it was being
     // sized under a min-content constraint, in which the maximize-tracks step
     // has zero free space — so auto rows containing only scroll-container

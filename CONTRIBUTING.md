@@ -5,7 +5,7 @@ New contributions are extremely welcome!
 
 The basic process is simple:
 
-1. Pick an [issue](https://github.com/DioxusLabs/taffy/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22), or [file a new one](https://github.com/DioxusLabs/taffy/issues/new).
+1. Pick an [issue](https://github.com/RetGui/gummy/issues), or [file a new one](https://github.com/RetGui/gummy/issues/new).
 2. Comment in the issue that you plan to tackle it, and the team will assign the task to you.
 3. Submit a PR.
 4. Respond to feedback from reviewers and make sure CI passes.
@@ -16,7 +16,7 @@ If you'd like to help on a consistent basis or are interested in project managem
 
 ## The "just" task runner
 
-Taffy uses a task runner called [just](github.com/casey/just) to run tasks. This can be installed by running `cargo install --locked just`. This is just necessary for the commands of the form `just ...` to work.
+Gummy uses a task runner called [just](https://github.com/casey/just) to run tasks. This can be installed by running `cargo install --locked just`. This is just necessary for the commands of the form `just ...` to work.
 If you do you not want to install `just` then you can peak into the `justfile` in the root of this repo to see the equivalent cargo command, which will usually be of the form `cargo run -rp <package> ...`.
 
 ## Testing

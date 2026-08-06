@@ -1,8 +1,8 @@
-//! A tagged-pointer abstraction that allows size styles in Taffy to be represented
+//! A tagged-pointer abstraction that allows size styles in Gummy to be represented
 //! in just 64 bits. Wrapped by types in the `super::dimension` and `super::grid` modules.
 use super::LengthPercentage;
 use crate::style_helpers::{
-    FromFr, FromLength, FromPercent, TaffyAuto, TaffyFitContent, TaffyMaxContent, TaffyMinContent, TaffyZero,
+    FromFr, FromLength, FromPercent, GummyAuto, GummyFitContent, GummyMaxContent, GummyMinContent, GummyZero,
 };
 
 /// Note: these two functions are copied directly from the std (core) library. But by duplicating them
@@ -40,7 +40,7 @@ mod compat {
 }
 
 #[cfg(not(any(target_pointer_width = "32", target_pointer_width = "64")))]
-std::compile_error!("Taffy only supports targets with a pointer width of 32 or 64 bits");
+std::compile_error!("Gummy only supports targets with a pointer width of 32 or 64 bits");
 
 /// CompactLengthInner implementation for 64 bit platforms
 #[cfg(target_pointer_width = "64")]
@@ -232,7 +232,7 @@ impl CompactLength {
 }
 
 impl CompactLength {
-    /// An absolute length in some abstract units. Users of Taffy may define what they correspond
+    /// An absolute length in some abstract units. Users of Gummy may define what they correspond
     /// to in their application (pixels, logical pixels, mm, etc) as they see fit.
     #[inline(always)]
     pub const fn length(val: f32) -> Self {
@@ -454,16 +454,16 @@ impl CompactLength {
     }
 }
 
-impl TaffyZero for CompactLength {
+impl GummyZero for CompactLength {
     const ZERO: Self = Self::length(0.0);
 }
-impl TaffyAuto for CompactLength {
+impl GummyAuto for CompactLength {
     const AUTO: Self = Self::auto();
 }
-impl TaffyMinContent for CompactLength {
+impl GummyMinContent for CompactLength {
     const MIN_CONTENT: Self = Self::min_content();
 }
-impl TaffyMaxContent for CompactLength {
+impl GummyMaxContent for CompactLength {
     const MAX_CONTENT: Self = Self::max_content();
 }
 impl FromLength for CompactLength {
@@ -481,7 +481,7 @@ impl FromFr for CompactLength {
         Self::fr(value.into())
     }
 }
-impl TaffyFitContent for CompactLength {
+impl GummyFitContent for CompactLength {
     fn fit_content(lp: LengthPercentage) -> Self {
         let value = lp.0.value();
         match lp.0.tag() {

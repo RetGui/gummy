@@ -1,5 +1,7 @@
 # Changelog
 
+Entries predating the Gummy fork are preserved from upstream Taffy for historical accuracy and attribution.
+
 ## 0.12.1
 
 This release container a couple of critical fixes for layout/caching bugs in the 0.12.0 release.
@@ -73,7 +75,7 @@ Additionally the `parse_faster` feature enables optimizations for faster parsing
 ### Changed
 
 - Make DetailedGridTracksInfo accessible from a public module (#899)
-- Add `TaffyTree::write_tree` method to debug print the tree into an arbitrary writer (#925)
+- Add `GummyTree::write_tree` method to debug print the tree into an arbitrary writer (#925)
 - The cache `set` and `set` APIs now take `&LayoutInput` rather than individual values (#933)
 
 ### Fixed
@@ -187,8 +189,8 @@ resolve the value.
 
 ### Fixed
 
-- Add `#[inline]` annotation to some methods on `TaffyTree` (#802)
-- Add `TaffyTree::remove_children_range` method (#802)
+- Add `#[inline]` annotation to some methods on `GummyTree` (#802)
+- Add `GummyTree::remove_children_range` method (#802)
 
 ## 0.7.6
 
@@ -212,7 +214,7 @@ resolve the value.
 
 ### Fixed
 
-- Make `TaffyTree::detailed_layout_info` take `&self` rather than `&mut self` (#779)
+- Make `GummyTree::detailed_layout_info` take `&self` rather than `&mut self` (#779)
 
 ## 0.7.2
 
@@ -220,7 +222,7 @@ resolve the value.
 
 - The ability to access computed track sizes and item positions of a CSS Grid layout (#772).
   This information can be accessed using the `LayoutGridContainer::set_detailed_grid_info` method
-  in the low-level API or the `TaffyTree::detailed_layout_info` method in the high-level API.
+  in the low-level API or the `GummyTree::detailed_layout_info` method in the high-level API.
 
 ## 0.7.1
 
@@ -230,7 +232,7 @@ resolve the value.
 
 ### Added
 
-- Add `TaffyTree::unrounded_layout` getter (#765)
+- Add `GummyTree::unrounded_layout` getter (#765)
 
 ### Removed
 
@@ -242,7 +244,7 @@ resolve the value.
 
 - BREAKING: The `cache_mut` method on the `LayoutPartialTree` trait has been replaced with a separate `CacheTree` trait. This allows
   Taffy to be more easily used without caching or with a custom cache implementation.
-- BREAKING: the `TaffyTree::set_children` method now removes the children from their previous parent (if they have one).
+- BREAKING: the `GummyTree::set_children` method now removes the children from their previous parent (if they have one).
 
 ### Added
 
@@ -374,7 +376,7 @@ and to interact better with borrow checking (you can now borrow external data in
 
 - There are no longer per-node measure functions.
 - There is now a single "global" measure function, and a per-node "context" of a user-defined type
-- The `Taffy` tree is now a generic `TaffyTree<T>` where `T` is the "context" type.
+- The `Taffy` tree is now a generic `GummyTree<T>` where `T` is the "context" type.
 - The measure function is now called for all leaf nodes (nodes without children). If you wish to maintain compatibility with the previous
   behaviour then your measure function should return `Size::ZERO` for leaf nodes whose context is `None`.
 
@@ -387,10 +389,10 @@ let mut tree = Taffy::new();
 to
 
 ```rust
-let mut tree : TaffyTree<()> = TaffyTree::new();
+let mut tree : GummyTree<()> = GummyTree::new();
 ```
 
-And generally update any uses of `Taffy` in your codebase to `TaffyTree<()>`.
+And generally update any uses of `Taffy` in your codebase to `GummyTree<()>`.
 
 If you are using measure functions then you will need to make some bigger (but straightforward) changes. The following Taffy 0.3 code:
 
@@ -406,7 +408,7 @@ tree.compute_layout(leaf, Size::MAX_CONTENT);
 Should become something like the following with Taffy 0.4:
 
 ```rust
-let mut tree : TaffyTree<Size> = TaffyTree::new();
+let mut tree : GummyTree<Size> = GummyTree::new();
 let leaf = tree.new_leaf_with_context(Style::DEFAULT, Size { width: 100.0, height: 200.0 });
 tree.compute_layout_with_measure(
   leaf,
@@ -428,9 +430,9 @@ Note that:
 
 The low-level API has been completely reworked:
 
-- The `LayoutTree` trait has been split into 5 smaller traits which live in the `taffy::tree:traits` module (along with their associated documentation)
+- The `LayoutTree` trait has been split into 5 smaller traits which live in the `gummy::tree:traits` module (along with their associated documentation)
 - The following methods have been removed from split `LayoutTree` traits entirely: `parent`, `is_childless`, `measure_node`, `needs_measure`, and `mark_dirty`.
-- `taffy::node::Node` has been replaced with `taffy::NodeId`. This should make it much easier to implement the low-level traits as the underlying type backing the node id now a `u64` rather than a `slotmap::DefaultKey`.
+- `gummy::node::Node` has been replaced with `gummy::NodeId`. This should make it much easier to implement the low-level traits as the underlying type backing the node id now a `u64` rather than a `slotmap::DefaultKey`.
 - Support for running each layout algorithm individually on a single node via the following top-level functions:
   - `compute_flexbox_layout`
   - `compute_grid_layout`
@@ -444,7 +446,7 @@ improved both the documentation and have added examples using the new API, both 
 
 ### Module hierarchy changes
 
-The specific changes are detailed below. However for most users the most significant change will be that almost all types are now re-exported from the root module. This means that module specific imports like `use taffy::layout::Layout` can now in almost all cases be replaced with the simpler `use taffy::Layout`.
+The specific changes are detailed below. However for most users the most significant change will be that almost all types are now re-exported from the root module. This means that module specific imports like `use gummy::layout::Layout` can now in almost all cases be replaced with the simpler `use gummy::Layout`.
 
 Specific changes:
 
@@ -452,7 +454,7 @@ Specific changes:
 - The `axis` module has been merged into the `geometry` module
 - The debug module is no longer public. The `print_tree` function is now accessible under `util`.
 - All types from the `node`, `data`, `layout`, `error` and `cache` modules have been moved to the  the `tree` module.
-- The `layout_flexbox()` function has been removed from the prelude. Use `taffy::compute_flexbox_layout` instead.
+- The `layout_flexbox()` function has been removed from the prelude. Use `gummy::compute_flexbox_layout` instead.
 
 ### Many APIs have been renamed to replace `points` or `Points` with `length` or `Length`
 
@@ -465,7 +467,7 @@ whose components can have any unit and are not even necessarily absolute lengths
 Example usage change:
 
 ```diff
- use taffy::prelude::*;
+ use gummy::prelude::*;
 
  // …
 
@@ -481,15 +483,15 @@ Example usage change:
 
 ### Other Changes
 
-- The `Taffy` type was renamed to `TaffyTree` and made generic of a context parameter
+- The `Taffy` type was renamed to `GummyTree` and made generic of a context parameter
 - The Flexbox algorithm has now been moved behind the `flexbox` feature. The `flexbox` feature is enabled by default.
 - The `justify_self` property has been moved behind the `grid` feature.
 - Fixed misspelling: `RunMode::PeformLayout` renamed into `RunMode::PerformLayout` (added missing `r`).
 - `serde` dependency has been made compatible with `no_std` environments
 - `slotmap` dependency has been made compatible with `no_std` environments
-- Added `insert_child_at_index()` method to the `TaffyTree`. This can be used to insert a child node at any position instead of just the end.
-- Added `total_node_count()` method to the `TaffyTree` which returns the total number of nodes in the tree.
-- Added `get_disjoint_node_context_mut()` method to the `TaffyTree`. This can be used to safely get multiple mutable borrows at the same time.
+- Added `insert_child_at_index()` method to the `GummyTree`. This can be used to insert a child node at any position instead of just the end.
+- Added `total_node_count()` method to the `GummyTree` which returns the total number of nodes in the tree.
+- Added `get_disjoint_node_context_mut()` method to the `GummyTree`. This can be used to safely get multiple mutable borrows at the same time.
 
 ## 0.3.19
 
@@ -891,7 +893,7 @@ The `AvailableSpace` enum has been moved from the `layout` module to the `style`
 ### Fixes
 
 - In case of conflicts, `min_size` now overrides `max_size` which overrides `size` (#261). This is the behaviour specified in the CSS specification, and was also the behaviour in Taffy `v0.1.0`, but a regression was introduced in Taffy `v0.2.0`.
-- `taffy::compute_layout` has been made public allowing Taffy to be used with custom storage (#263)
+- `gummy::compute_layout` has been made public allowing Taffy to be used with custom storage (#263)
 
 ## 0.2.0
 
@@ -907,14 +909,14 @@ Additionally we have a `SpaceEvenly` variant to the `AlignContent` enum to suppo
 
 Two debugging features have been added:
 
-- `taffy::debug::print_tree(&Taffy, root)` - This will print a debug representation of the computed layout of an entire node tree (starting at `root`), which can be useful for debugging layouts.
+- `gummy::debug::print_tree(&Taffy, root)` - This will print a debug representation of the computed layout of an entire node tree (starting at `root`), which can be useful for debugging layouts.
 - A cargo feature `debug`. This enabled debug logging of the layout computation process itself (this is probably mainly useful for those working taffy itself).
 
 ### Performance improvements
 
 A number of performance improvements have landed since taffy 0.1:
 
-- Firstly, our custom `taffy::forest` storage implementation was ripped out and replaced with a much simpler implementation using the `slotmap` crate. This led to performance increases of up to 90%.
+- Firstly, our custom `gummy::forest` storage implementation was ripped out and replaced with a much simpler implementation using the `slotmap` crate. This led to performance increases of up to 90%.
 - Secondly, the caching implementation was improved by upping the number of cache slots from 2 to 4 and tweaking how computed results are allocated to cache slots to better match the actual usage patterns of the flexbox layout algorithm. This had a particularly dramatic effect on deep hierarchies (which often involve recomputing the same results repeatedly), fixing the exponential blowup that was previously exhibited on these trees and improving performance by over 1000x in some cases!
 
 #### Benchmarks vs. Taffy 0.1
@@ -955,20 +957,20 @@ While we're trying not to get too excited (there could easily be an issue with o
 
 #### Node creation changes
 
-- `taffy::Node` is now unique only to the Taffy instance from which it was created.
+- `gummy::Node` is now unique only to the Taffy instance from which it was created.
 - Renamed `Taffy.new_node(..)` -> `Taffy.new_with_children(..)`
 - Renamed `Taffy.new_leaf()` -> `Taffy.new_leaf_with_measure()`
-- Added `taffy::node::Taffy.new_leaf()` which allows the creation of new leaf-nodes without having to supply a measure function
+- Added `gummy::node::Taffy.new_leaf()` which allows the creation of new leaf-nodes without having to supply a measure function
 
 #### Error handling/representation improvements
 
-- Renamed `taffy::Error` -> `taffy::error::TaffyError`
-- Replaced `taffy::error::InvalidChild` with a new `InvalidChild` variant of `taffy::error::TaffyError`
-- Replaced `taffy::error::InvalidNode` with a new `InvalidNode` variant of `taffy::error::TaffyError`
-- The following method new return `Err(TaffyError::ChildIndexOutOfBounds)` instead of panicking:
-  - `taffy::Taffy::remove_child_at_index`
-  - `taffy::Taffy::replace_child_at_index`
-  - `taffy::Taffy::child_at_index`
+- Renamed `gummy::Error` -> `gummy::error::GummyError`
+- Replaced `gummy::error::InvalidChild` with a new `InvalidChild` variant of `gummy::error::GummyError`
+- Replaced `gummy::error::InvalidNode` with a new `InvalidNode` variant of `gummy::error::GummyError`
+- The following method new return `Err(GummyError::ChildIndexOutOfBounds)` instead of panicking:
+  - `gummy::Taffy::remove_child_at_index`
+  - `gummy::Taffy::replace_child_at_index`
+  - `gummy::Taffy::child_at_index`
 - `Taffy::remove` now returns a `Result<usize, Error>`, to indicate if the operation was successful (and if it was, which ID was invalidated).
 
 #### Some uses of `Option<f32>` replaced with a new `AvailableSpace` enum
@@ -1002,8 +1004,8 @@ And a different instance of it is passed as a new second parameter to `MeasureFu
 
 #### Removals
 
-- Removed `taffy::forest::Forest`. `taffy::node::Taffy` now handles it's own storage using a slotmap (which comes with a performance boost up to 90%).
-- Removed `taffy::number::Number`. Use `Option<f32>` is used instead
+- Removed `gummy::forest::Forest`. `gummy::node::Taffy` now handles it's own storage using a slotmap (which comes with a performance boost up to 90%).
+- Removed `gummy::number::Number`. Use `Option<f32>` is used instead
   - the associated public `MinMax` and `OrElse` traits have also been removed; these should never have been public
 - Removed unused dependencies `hashbrown`, `hash32`, and `typenum`. `slotmap` is now the only required dependency (`num_traits` and `arrayvec` are also required if you wish to use taffy in a `no_std` environment).
 
@@ -1023,9 +1025,9 @@ And a different instance of it is passed as a new second parameter to `MeasureFu
 ### 0.1.0 Changed
 
 - the `order` field of `Layout` is now public, and describes the relative z-ordering of nodes
-- renamed crate from `stretch2` to `taffy`
+- renamed crate from `stretch2` to `gummy`
 - updated to the latest version of all dependencies to reduce upstream pain caused by duplicate dependencies
-- renamed `stretch::node::Stretch` -> `taffy::node::Taffy`
+- renamed `stretch::node::Stretch` -> `gummy::node::Taffy`
 
 ### 0.1.0 Fixed
 
@@ -1043,7 +1045,7 @@ And a different instance of it is passed as a new second parameter to `MeasureFu
 
 ## stretch2 0.4.3
 
-This is the final release of `stretch`: migrate to the crate named `taffy` for future fixes and features!
+This is the final release of `stretch`: migrate to the crate named `gummy` for future fixes and features!
 
 These notes describe the differences between this release and `stretch` 0.3.2, the abandoned crate from which this library was forked.
 

@@ -47,21 +47,21 @@ pub fn evenly_sized_tracks<S: CheapCloneStr>(count: u16) -> Vec<GridTemplateComp
 ///  - Positive indices count upwards from the start (top or left) of the explicit grid
 ///  - Negative indices count downwards from the end (bottom or right) of the explicit grid
 ///  - ZERO IS INVALID index, and will be treated as a GridPlacement::Auto.
-pub fn line<T: TaffyGridLine>(index: i16) -> T {
+pub fn line<T: GummyGridLine>(index: i16) -> T {
     T::from_line_index(index)
 }
 /// Trait to abstract over grid line values
-pub trait TaffyGridLine {
+pub trait GummyGridLine {
     /// Converts an i16 into Self
     fn from_line_index(index: i16) -> Self;
 }
 
 /// Returns a GridPlacement::Span
-pub fn span<T: TaffyGridSpan>(span: u16) -> T {
+pub fn span<T: GummyGridSpan>(span: u16) -> T {
     T::from_span(span)
 }
 /// Trait to abstract over grid span values
-pub trait TaffyGridSpan {
+pub trait GummyGridSpan {
     /// Converts an u16 into Self
     fn from_span(span: u16) -> Self;
 }
@@ -86,55 +86,55 @@ where
 }
 
 /// Returns the zero value for that type
-pub const fn zero<T: TaffyZero>() -> T {
+pub const fn zero<T: GummyZero>() -> T {
     T::ZERO
 }
 
 /// Trait to abstract over zero values
-pub trait TaffyZero {
-    /// The zero value for type implementing TaffyZero
+pub trait GummyZero {
+    /// The zero value for type implementing GummyZero
     const ZERO: Self;
 }
-impl TaffyZero for f32 {
+impl GummyZero for f32 {
     const ZERO: f32 = 0.0;
 }
-impl<T: TaffyZero> TaffyZero for Option<T> {
+impl<T: GummyZero> GummyZero for Option<T> {
     const ZERO: Option<T> = Some(T::ZERO);
 }
-impl<T: TaffyZero> TaffyZero for Point<T> {
+impl<T: GummyZero> GummyZero for Point<T> {
     const ZERO: Point<T> = Point { x: T::ZERO, y: T::ZERO };
 }
-impl<T: TaffyZero> Point<T> {
+impl<T: GummyZero> Point<T> {
     /// Returns a Point where both the x and y values are the zero value of the contained type
     /// (e.g. 0.0, Some(0.0), or Dimension::Length(0.0))
     pub const fn zero() -> Self {
         zero::<Self>()
     }
 }
-impl<T: TaffyZero> TaffyZero for Line<T> {
+impl<T: GummyZero> GummyZero for Line<T> {
     const ZERO: Line<T> = Line { start: T::ZERO, end: T::ZERO };
 }
-impl<T: TaffyZero> Line<T> {
+impl<T: GummyZero> Line<T> {
     /// Returns a Line where both the start and end values are the zero value of the contained type
     /// (e.g. 0.0, Some(0.0), or Dimension::Length(0.0))
     pub const fn zero() -> Self {
         zero::<Self>()
     }
 }
-impl<T: TaffyZero> TaffyZero for Size<T> {
+impl<T: GummyZero> GummyZero for Size<T> {
     const ZERO: Size<T> = Size { width: T::ZERO, height: T::ZERO };
 }
-impl<T: TaffyZero> Size<T> {
+impl<T: GummyZero> Size<T> {
     /// Returns a Size where both the width and height values are the zero value of the contained type
     /// (e.g. 0.0, Some(0.0), or Dimension::Length(0.0))
     pub const fn zero() -> Self {
         zero::<Self>()
     }
 }
-impl<T: TaffyZero> TaffyZero for Rect<T> {
+impl<T: GummyZero> GummyZero for Rect<T> {
     const ZERO: Rect<T> = Rect { left: T::ZERO, right: T::ZERO, top: T::ZERO, bottom: T::ZERO };
 }
-impl<T: TaffyZero> Rect<T> {
+impl<T: GummyZero> Rect<T> {
     /// Returns a Rect where the left, right, top, and bottom values are all the zero value of the contained type
     /// (e.g. 0.0, Some(0.0), or Dimension::Length(0.0))
     pub const fn zero() -> Self {
@@ -143,52 +143,52 @@ impl<T: TaffyZero> Rect<T> {
 }
 
 /// Returns the auto value for that type
-pub const fn auto<T: TaffyAuto>() -> T {
+pub const fn auto<T: GummyAuto>() -> T {
     T::AUTO
 }
 
 /// Trait to abstract over auto values
-pub trait TaffyAuto {
-    /// The auto value for type implementing TaffyAuto
+pub trait GummyAuto {
+    /// The auto value for type implementing GummyAuto
     const AUTO: Self;
 }
-impl<T: TaffyAuto> TaffyAuto for Option<T> {
+impl<T: GummyAuto> GummyAuto for Option<T> {
     const AUTO: Option<T> = Some(T::AUTO);
 }
-impl<T: TaffyAuto> TaffyAuto for Point<T> {
+impl<T: GummyAuto> GummyAuto for Point<T> {
     const AUTO: Point<T> = Point { x: T::AUTO, y: T::AUTO };
 }
-impl<T: TaffyAuto> Point<T> {
+impl<T: GummyAuto> Point<T> {
     /// Returns a Point where both the x and y values are the auto value of the contained type
     /// (e.g. Dimension::Auto or LengthPercentageAuto::Auto)
     pub const fn auto() -> Self {
         auto::<Self>()
     }
 }
-impl<T: TaffyAuto> TaffyAuto for Line<T> {
+impl<T: GummyAuto> GummyAuto for Line<T> {
     const AUTO: Line<T> = Line { start: T::AUTO, end: T::AUTO };
 }
-impl<T: TaffyAuto> Line<T> {
+impl<T: GummyAuto> Line<T> {
     /// Returns a Line where both the start and end values are the auto value of the contained type
     /// (e.g. Dimension::Auto or LengthPercentageAuto::Auto)
     pub const fn auto() -> Self {
         auto::<Self>()
     }
 }
-impl<T: TaffyAuto> TaffyAuto for Size<T> {
+impl<T: GummyAuto> GummyAuto for Size<T> {
     const AUTO: Size<T> = Size { width: T::AUTO, height: T::AUTO };
 }
-impl<T: TaffyAuto> Size<T> {
+impl<T: GummyAuto> Size<T> {
     /// Returns a Size where both the width and height values are the auto value of the contained type
     /// (e.g. Dimension::Auto or LengthPercentageAuto::Auto)
     pub const fn auto() -> Self {
         auto::<Self>()
     }
 }
-impl<T: TaffyAuto> TaffyAuto for Rect<T> {
+impl<T: GummyAuto> GummyAuto for Rect<T> {
     const AUTO: Rect<T> = Rect { left: T::AUTO, right: T::AUTO, top: T::AUTO, bottom: T::AUTO };
 }
-impl<T: TaffyAuto> Rect<T> {
+impl<T: GummyAuto> Rect<T> {
     /// Returns a Rect where the left, right, top, and bottom values are all the auto value of the contained type
     /// (e.g. Dimension::Auto or LengthPercentageAuto::Auto)
     pub const fn auto() -> Self {
@@ -197,53 +197,53 @@ impl<T: TaffyAuto> Rect<T> {
 }
 
 /// Returns the auto value for that type
-pub const fn min_content<T: TaffyMinContent>() -> T {
+pub const fn min_content<T: GummyMinContent>() -> T {
     T::MIN_CONTENT
 }
 
 /// Trait to abstract over min_content values
-pub trait TaffyMinContent {
-    /// The min_content value for type implementing TaffyZero
+pub trait GummyMinContent {
+    /// The min_content value for type implementing GummyZero
     const MIN_CONTENT: Self;
 }
-impl<T: TaffyMinContent> TaffyMinContent for Option<T> {
+impl<T: GummyMinContent> GummyMinContent for Option<T> {
     const MIN_CONTENT: Option<T> = Some(T::MIN_CONTENT);
 }
-impl<T: TaffyMinContent> TaffyMinContent for Point<T> {
+impl<T: GummyMinContent> GummyMinContent for Point<T> {
     const MIN_CONTENT: Point<T> = Point { x: T::MIN_CONTENT, y: T::MIN_CONTENT };
 }
-impl<T: TaffyMinContent> Point<T> {
+impl<T: GummyMinContent> Point<T> {
     /// Returns a Point where both the x and y values are the min_content value of the contained type
     /// (e.g. Dimension::Auto or LengthPercentageAuto::Auto)
     pub const fn min_content() -> Self {
         min_content::<Self>()
     }
 }
-impl<T: TaffyMinContent> TaffyMinContent for Line<T> {
+impl<T: GummyMinContent> GummyMinContent for Line<T> {
     const MIN_CONTENT: Line<T> = Line { start: T::MIN_CONTENT, end: T::MIN_CONTENT };
 }
-impl<T: TaffyMinContent> Line<T> {
+impl<T: GummyMinContent> Line<T> {
     /// Returns a Line where both the start and end values are the min_content value of the contained type
     /// (e.g. Dimension::Auto or LengthPercentageAuto::Auto)
     pub const fn min_content() -> Self {
         min_content::<Self>()
     }
 }
-impl<T: TaffyMinContent> TaffyMinContent for Size<T> {
+impl<T: GummyMinContent> GummyMinContent for Size<T> {
     const MIN_CONTENT: Size<T> = Size { width: T::MIN_CONTENT, height: T::MIN_CONTENT };
 }
-impl<T: TaffyMinContent> Size<T> {
+impl<T: GummyMinContent> Size<T> {
     /// Returns a Size where both the width and height values are the min_content value of the contained type
     /// (e.g. Dimension::Auto or LengthPercentageAuto::Auto)
     pub const fn min_content() -> Self {
         min_content::<Self>()
     }
 }
-impl<T: TaffyMinContent> TaffyMinContent for Rect<T> {
+impl<T: GummyMinContent> GummyMinContent for Rect<T> {
     const MIN_CONTENT: Rect<T> =
         Rect { left: T::MIN_CONTENT, right: T::MIN_CONTENT, top: T::MIN_CONTENT, bottom: T::MIN_CONTENT };
 }
-impl<T: TaffyMinContent> Rect<T> {
+impl<T: GummyMinContent> Rect<T> {
     /// Returns a Rect where the left, right, top, and bottom values are all the min_content value of the contained type
     /// (e.g. Dimension::Auto or LengthPercentageAuto::Auto)
     pub const fn min_content() -> Self {
@@ -252,53 +252,53 @@ impl<T: TaffyMinContent> Rect<T> {
 }
 
 /// Returns the auto value for that type
-pub const fn max_content<T: TaffyMaxContent>() -> T {
+pub const fn max_content<T: GummyMaxContent>() -> T {
     T::MAX_CONTENT
 }
 
 /// Trait to abstract over max_content values
-pub trait TaffyMaxContent {
-    /// The max_content value for type implementing TaffyZero
+pub trait GummyMaxContent {
+    /// The max_content value for type implementing GummyZero
     const MAX_CONTENT: Self;
 }
-impl<T: TaffyMaxContent> TaffyMaxContent for Option<T> {
+impl<T: GummyMaxContent> GummyMaxContent for Option<T> {
     const MAX_CONTENT: Option<T> = Some(T::MAX_CONTENT);
 }
-impl<T: TaffyMaxContent> TaffyMaxContent for Point<T> {
+impl<T: GummyMaxContent> GummyMaxContent for Point<T> {
     const MAX_CONTENT: Point<T> = Point { x: T::MAX_CONTENT, y: T::MAX_CONTENT };
 }
-impl<T: TaffyMaxContent> Point<T> {
+impl<T: GummyMaxContent> Point<T> {
     /// Returns a Point where both the x and y values are the max_content value of the contained type
     /// (e.g. Dimension::Auto or LengthPercentageAuto::Auto)
     pub const fn max_content() -> Self {
         max_content::<Self>()
     }
 }
-impl<T: TaffyMaxContent> TaffyMaxContent for Line<T> {
+impl<T: GummyMaxContent> GummyMaxContent for Line<T> {
     const MAX_CONTENT: Line<T> = Line { start: T::MAX_CONTENT, end: T::MAX_CONTENT };
 }
-impl<T: TaffyMaxContent> Line<T> {
+impl<T: GummyMaxContent> Line<T> {
     /// Returns a Line where both the start and end values are the max_content value of the contained type
     /// (e.g. Dimension::Auto or LengthPercentageAuto::Auto)
     pub const fn max_content() -> Self {
         max_content::<Self>()
     }
 }
-impl<T: TaffyMaxContent> TaffyMaxContent for Size<T> {
+impl<T: GummyMaxContent> GummyMaxContent for Size<T> {
     const MAX_CONTENT: Size<T> = Size { width: T::MAX_CONTENT, height: T::MAX_CONTENT };
 }
-impl<T: TaffyMaxContent> Size<T> {
+impl<T: GummyMaxContent> Size<T> {
     /// Returns a Size where both the width and height values are the max_content value of the contained type
     /// (e.g. Dimension::Auto or LengthPercentageAuto::Auto)
     pub const fn max_content() -> Self {
         max_content::<Self>()
     }
 }
-impl<T: TaffyMaxContent> TaffyMaxContent for Rect<T> {
+impl<T: GummyMaxContent> GummyMaxContent for Rect<T> {
     const MAX_CONTENT: Rect<T> =
         Rect { left: T::MAX_CONTENT, right: T::MAX_CONTENT, top: T::MAX_CONTENT, bottom: T::MAX_CONTENT };
 }
-impl<T: TaffyMaxContent> Rect<T> {
+impl<T: GummyMaxContent> Rect<T> {
     /// Returns a Rect where the left, right, top, and bottom values are all the max_content value of the contained type
     /// (e.g. Dimension::Auto or LengthPercentageAuto::Auto)
     pub const fn max_content() -> Self {
@@ -308,52 +308,52 @@ impl<T: TaffyMaxContent> Rect<T> {
 
 /// Returns a value of the inferred type which represent a `fit-content(…)` value
 /// with the given argument.
-pub fn fit_content<T: TaffyFitContent>(argument: LengthPercentage) -> T {
+pub fn fit_content<T: GummyFitContent>(argument: LengthPercentage) -> T {
     T::fit_content(argument)
 }
 
 /// Trait to create `fit-content(…)` values from plain numbers
-pub trait TaffyFitContent {
+pub trait GummyFitContent {
     /// Converts a LengthPercentage into Self
     fn fit_content(argument: LengthPercentage) -> Self;
 }
-impl<T: TaffyFitContent> TaffyFitContent for Point<T> {
+impl<T: GummyFitContent> GummyFitContent for Point<T> {
     fn fit_content(argument: LengthPercentage) -> Self {
         Point { x: T::fit_content(argument), y: T::fit_content(argument) }
     }
 }
-impl<T: TaffyFitContent> Point<T> {
+impl<T: GummyFitContent> Point<T> {
     /// Returns a Point with x and y set to the same `fit-content(…)` value
     /// with the given argument.
     pub fn fit_content(argument: LengthPercentage) -> Self {
         fit_content(argument)
     }
 }
-impl<T: TaffyFitContent> TaffyFitContent for Line<T> {
+impl<T: GummyFitContent> GummyFitContent for Line<T> {
     fn fit_content(argument: LengthPercentage) -> Self {
         Line { start: T::fit_content(argument), end: T::fit_content(argument) }
     }
 }
-impl<T: TaffyFitContent> Line<T> {
+impl<T: GummyFitContent> Line<T> {
     /// Returns a Line with start and end set to the same `fit-content(…)` value
     /// with the given argument.
     pub fn fit_content(argument: LengthPercentage) -> Self {
         fit_content(argument)
     }
 }
-impl<T: TaffyFitContent> TaffyFitContent for Size<T> {
+impl<T: GummyFitContent> GummyFitContent for Size<T> {
     fn fit_content(argument: LengthPercentage) -> Self {
         Size { width: T::fit_content(argument), height: T::fit_content(argument) }
     }
 }
-impl<T: TaffyFitContent> Size<T> {
+impl<T: GummyFitContent> Size<T> {
     /// Returns a Size where with width and height set to the same `fit-content(…)` value
     /// with the given argument.
     pub fn fit_content(argument: LengthPercentage) -> Self {
         fit_content(argument)
     }
 }
-impl<T: TaffyFitContent> TaffyFitContent for Rect<T> {
+impl<T: GummyFitContent> GummyFitContent for Rect<T> {
     fn fit_content(argument: LengthPercentage) -> Self {
         Rect {
             left: T::fit_content(argument),
@@ -363,7 +363,7 @@ impl<T: TaffyFitContent> TaffyFitContent for Rect<T> {
         }
     }
 }
-impl<T: TaffyFitContent> Rect<T> {
+impl<T: GummyFitContent> Rect<T> {
     /// Returns a Rect where the left, right, top and bottom values are all constant fit_content value of the contained type
     /// (e.g. 2.1, Some(2.1), or Dimension::Length(2.1))
     pub fn fit_content(argument: LengthPercentage) -> Self {

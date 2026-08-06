@@ -42,7 +42,7 @@ pub use self::grid::{GridTemplateArea, NamedGridLine, TemplateLineNames};
 pub(crate) use self::grid::{NonNamedGridPlacement, OriginZeroGridPlacement};
 
 use crate::geometry::{Point, Rect, Size};
-use crate::style_helpers::TaffyAuto as _;
+use crate::style_helpers::GummyAuto as _;
 use core::fmt::Debug;
 
 #[cfg(feature = "grid")]
@@ -334,7 +334,7 @@ crate::util::parse::impl_parse_for_keyword_enum!(BoxSizing,
 ///   - The automatic minimum size Flexbox/CSS Grid items with non-`Visible` overflow is `0` rather than being content based
 ///   - `Overflow::Scroll` nodes have space in the layout reserved for a scrollbar (width controlled by the `scrollbar_width` property)
 ///
-/// In Taffy, we only implement the layout related secondary effects as we are not concerned with drawing/painting. The amount of space reserved for
+/// In Gummy, we only implement the layout related secondary effects as we are not concerned with drawing/painting. The amount of space reserved for
 /// a scrollbar is controlled by the `scrollbar_width` property. If this is `0` then `Scroll` behaves identically to `Hidden`.
 ///
 /// <https://developer.mozilla.org/en-US/docs/Web/CSS/overflow>
@@ -431,7 +431,7 @@ crate::util::parse::impl_parse_for_keyword_enum!(Direction,
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(default))]
 pub struct Style<S: CheapCloneStr = DefaultCheapStr> {
-    /// This is a dummy field which is necessary to make Taffy compile with the `grid` feature disabled
+    /// This is a dummy field which is necessary to make Gummy compile with the `grid` feature disabled
     /// It should always be set to `core::marker::PhantomData`.
     pub dummy: core::marker::PhantomData<S>,
     /// What layout strategy should be used?
@@ -1196,7 +1196,7 @@ mod tests {
 
     use super::Style;
     use crate::sys::DefaultCheapStr;
-    use crate::{geometry::*, style_helpers::TaffyAuto as _};
+    use crate::{geometry::*, style_helpers::GummyAuto as _};
 
     #[test]
     fn defaults_match() {
@@ -1285,11 +1285,11 @@ mod tests {
 
         fn assert_type_size<T>(expected_size: usize) {
             let name = ::core::any::type_name::<T>();
-            let name = name.replace("taffy::geometry::", "");
-            let name = name.replace("taffy::style::dimension::", "");
-            let name = name.replace("taffy::style::alignment::", "");
-            let name = name.replace("taffy::style::flex::", "");
-            let name = name.replace("taffy::style::grid::", "");
+            let name = name.replace("gummy::geometry::", "");
+            let name = name.replace("gummy::style::dimension::", "");
+            let name = name.replace("gummy::style::alignment::", "");
+            let name = name.replace("gummy::style::flex::", "");
+            let name = name.replace("gummy::style::grid::", "");
 
             assert_eq!(
                 ::core::mem::size_of::<T>(),
