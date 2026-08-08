@@ -1,0 +1,13 @@
+[package]
+name = "wpt"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+anyhow = "1.0"
+ego-tree = "0.10"
+gummy = { path = "../..", features = ["parse"] }
+lightningcss = { version = "=1.0.0-alpha.72", default-features = false, features = ["into_owned"] }
+png = "0.18"
+scraper = "0.24"
+vello_cpu = "0.2.0"
