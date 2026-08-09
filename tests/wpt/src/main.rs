@@ -52,7 +52,7 @@ use crate::parse::is_css_wide_keyword;
 use crate::parse::parse_writing_mode;
 use crate::parse::typed_initial_value;
 use crate::parse::{apply_declaration, declaration_direction, declaration_font_size};
-use crate::report::{ArtifactWriter, ReferenceReport, ReftestReport, TestStatus};
+use crate::report::{ArtifactWriter, ReferenceReport, ReftestReport, SourceReport, TestStatus};
 use gummy::prelude::{GummyAuto, GummyZero};
 use gummy::{Dimension, Display, GummyTree, LengthPercentageAuto, NodeId, Rect, Style};
 
@@ -580,11 +580,14 @@ fn run_reftest_and_save(
     reference_renderer: &ChromeReferenceRenderer,
 ) -> Result<ReftestReport> {
     let name = report_path(&reftest.test, wpt_dir);
-    let test_path = reftest.test.display().to_string();
+    let test_source = source_report(&reftest.test, wpt_dir);
+    let reference_sources =
+        reftest.references.iter().map(|reference| source_report(&reference.reference, wpt_dir)).collect::<Vec<_>>();
     if let Some(reason) = skip::reason_for_test(&reftest.test, wpt_dir) {
         return Ok(ReftestReport {
             name,
-            test_path,
+            test_source,
+            reference_sources,
             status: TestStatus::Skip,
             reason,
             actual_image: None,
@@ -597,7 +600,8 @@ fn run_reftest_and_save(
         Err(error) => {
             return Ok(ReftestReport {
                 name,
-                test_path,
+                test_source,
+                reference_sources,
                 status: TestStatus::Error,
                 reason: format!("Test render: {error}"),
                 actual_image: None,
@@ -609,12 +613,10 @@ fn run_reftest_and_save(
     let mut references = Vec::with_capacity(reftest.references.len());
 
     for (reference_index, reference) in reftest.references.iter().enumerate() {
-        let reference_path = reference.reference.display().to_string();
         let fuzzy = match &reference.fuzzy {
             Ok(fuzzy) => *fuzzy,
             Err(error) => {
                 references.push(ReferenceReport {
-                    reference_path,
                     relation: reference.relation,
                     status: TestStatus::Error,
                     reason: format!("Invalid WPT fuzzy metadata: {error}"),
@@ -630,7 +632,6 @@ fn run_reftest_and_save(
             Ok(buffer) => buffer,
             Err(error) => {
                 references.push(ReferenceReport {
-                    reference_path,
                     relation: reference.relation,
                     status: TestStatus::Error,
                     reason: format!("Chrome reference screenshot: {error}"),
@@ -665,7 +666,6 @@ fn run_reftest_and_save(
             difference.total_pixels
         );
         references.push(ReferenceReport {
-            reference_path,
             relation: reference.relation,
             status,
             reason,
@@ -687,7 +687,7 @@ fn run_reftest_and_save(
     }
     .to_string();
 
-    Ok(ReftestReport { name, test_path, status, reason, actual_image, references })
+    Ok(ReftestReport { name, test_source, reference_sources, status, reason, actual_image, references })
 }
 
 fn aggregate_reftest_status(references: &[ReferenceReport]) -> TestStatus {
@@ -733,6 +733,10 @@ fn aggregate_reftest_status(references: &[ReferenceReport]) -> TestStatus {
 
 fn report_path(path: &Path, wpt_dir: &Path) -> String {
     path.strip_prefix(wpt_dir).unwrap_or(path).to_string_lossy().replace('\\', "/")
+}
+
+fn source_report(path: &Path, wpt_dir: &Path) -> SourceReport {
+    SourceReport { display_path: report_path(path, wpt_dir), file_path: path.to_path_buf() }
 }
 
 pub fn load_reftests(wpt_dir: &Path, css_dir: &Path, filter: Option<&str>) -> Result<Vec<Reftest>> {

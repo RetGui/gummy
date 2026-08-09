@@ -40,7 +40,8 @@ impl fmt::Display for TestStatus {
 #[derive(Debug)]
 pub struct ReftestReport {
     pub name: String,
-    pub test_path: String,
+    pub test_source: SourceReport,
+    pub reference_sources: Vec<SourceReport>,
     pub status: TestStatus,
     pub reason: String,
     pub actual_image: Option<String>,
@@ -48,8 +49,13 @@ pub struct ReftestReport {
 }
 
 #[derive(Debug)]
+pub struct SourceReport {
+    pub display_path: String,
+    pub file_path: PathBuf,
+}
+
+#[derive(Debug)]
 pub struct ReferenceReport {
-    pub reference_path: String,
     pub relation: ReferenceRelation,
     pub status: TestStatus,
     pub reason: String,
@@ -235,7 +241,7 @@ impl ArtifactWriter {
 
     pub fn write_report(&self, results: &[ReftestReport]) -> Result<PathBuf> {
         let path = self.output_dir.join("report.html");
-        let html = render_html(results);
+        let html = render_html(results, &self.output_dir);
         fs::write(&path, html).with_context(|| format!("failed to write WPT report at {}", path.display()))?;
         Ok(path)
     }
@@ -301,7 +307,7 @@ fn write_png(path: &Path, rgba: &[u8], width: usize, height: usize) -> Result<()
     Ok(())
 }
 
-fn render_html(results: &[ReftestReport]) -> String {
+fn render_html(results: &[ReftestReport], report_dir: &Path) -> String {
     let passed = results.iter().filter(|result| result.status == TestStatus::Pass).count();
     let failed = results.iter().filter(|result| result.status == TestStatus::Fail).count();
     let errors = results.iter().filter(|result| result.status == TestStatus::Error).count();
@@ -360,6 +366,16 @@ h1 {{ margin-bottom: .25rem; }}
 .fail, .error {{ border-left-color: #da3633; }}
 .skip {{ border-left-color: #9a6700; }}
 .paths, .reason {{ overflow-wrap: anywhere; }}
+.paths a, .source-path a {{ color: #0969da; }}
+.source-view {{ border: 1px solid #8888; margin: 1rem 0; }}
+.source-view > summary {{ cursor: pointer; font-weight: 650; padding: .65rem .8rem; }}
+.source-view-body {{ border-top: 1px solid #8888; padding: 0 .8rem .8rem; }}
+.source-tabs {{ border-bottom: 1px solid #8888; display: flex; flex-wrap: wrap; gap: .25rem; margin-top: .8rem; }}
+.source-tabs button {{ background: transparent; border: 1px solid transparent; cursor: pointer; font: inherit; padding: .55rem .8rem; }}
+.source-tabs button[aria-selected="true"] {{ background: #fff; border-color: #8888; border-bottom-color: #fff; font-weight: 700; margin-bottom: -1px; }}
+.source-panel {{ padding-top: .7rem; }}
+.source-path {{ margin: 0 0 .55rem; overflow-wrap: anywhere; }}
+.source-code {{ background: #fff; border: 1px solid #8888; font: 13px/1.45 ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace; margin: 0; max-height: 32rem; overflow: auto; padding: .8rem; tab-size: 2; white-space: pre; }}
 #pass-rates-panel {{ width:70%; min-width: 200px; margin-left: auto; margin-right: auto; }}
 .comparison {{ display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(min(100%, 30rem), 1fr)); }}
 figure {{ margin: 0; min-width: 0; }}
@@ -398,11 +414,13 @@ img {{ background: white; border: 1px solid #8888; display: block; height: auto;
     )
     .unwrap();
 
+    let mut result_index = 0;
     for (name, node) in &report_tree.children {
-        write_report_node(&mut html, name, node, 0, name, &category_ids);
+        write_report_node(&mut html, name, node, 0, name, &category_ids, report_dir, &mut result_index);
     }
     for result in &report_tree.results {
-        write_result(&mut html, result);
+        write_result(&mut html, result, result_index, report_dir);
+        result_index += 1;
     }
 
     html.push_str(
@@ -413,30 +431,32 @@ img {{ background: white; border: 1px solid #8888; display: block; height: auto;
 
     html.push_str(
         r##"<script>
-const tabs = Array.from(document.querySelectorAll('[role="tab"]'));
-const panels = Array.from(document.querySelectorAll('[role="tabpanel"]'));
-function selectTab(selectedTab) {
+document.querySelectorAll('[role="tablist"]').forEach((tablist) => {
+  const tabs = Array.from(tablist.querySelectorAll(':scope > [role="tab"]'));
+  const panels = tabs.map((tab) => document.getElementById(tab.getAttribute("aria-controls"))).filter(Boolean);
+  function selectTab(selectedTab) {
+    tabs.forEach((tab) => {
+      const selected = tab === selectedTab;
+      tab.setAttribute("aria-selected", String(selected));
+      tab.tabIndex = selected ? 0 : -1;
+    });
+    panels.forEach((panel) => {
+      panel.hidden = panel.id !== selectedTab.getAttribute("aria-controls");
+    });
+  }
   tabs.forEach((tab) => {
-    const selected = tab === selectedTab;
-    tab.setAttribute("aria-selected", String(selected));
-    tab.tabIndex = selected ? 0 : -1;
-  });
-  panels.forEach((panel) => {
-    panel.hidden = panel.id !== selectedTab.getAttribute("aria-controls");
-  });
-}
-tabs.forEach((tab) => {
-  tab.addEventListener("click", () => selectTab(tab));
-  tab.addEventListener("keydown", (event) => {
-    let nextTab;
-    if (event.key === "Home") nextTab = tabs[0];
-    if (event.key === "End") nextTab = tabs[tabs.length - 1];
-    if (event.key === "ArrowLeft") nextTab = tabs[(tabs.indexOf(tab) - 1 + tabs.length) % tabs.length];
-    if (event.key === "ArrowRight") nextTab = tabs[(tabs.indexOf(tab) + 1) % tabs.length];
-    if (!nextTab) return;
-    event.preventDefault();
-    selectTab(nextTab);
-    nextTab.focus();
+    tab.addEventListener("click", () => selectTab(tab));
+    tab.addEventListener("keydown", (event) => {
+      let nextTab;
+      if (event.key === "Home") nextTab = tabs[0];
+      if (event.key === "End") nextTab = tabs[tabs.length - 1];
+      if (event.key === "ArrowLeft") nextTab = tabs[(tabs.indexOf(tab) - 1 + tabs.length) % tabs.length];
+      if (event.key === "ArrowRight") nextTab = tabs[(tabs.indexOf(tab) + 1) % tabs.length];
+      if (!nextTab) return;
+      event.preventDefault();
+      selectTab(nextTab);
+      nextTab.focus();
+    });
   });
 });
 
@@ -692,6 +712,8 @@ fn write_report_node(
     depth: usize,
     path: &str,
     category_ids: &BTreeMap<String, usize>,
+    report_dir: &Path,
+    result_index: &mut usize,
 ) {
     let counts = node.counts();
     let is_test = !node.results.is_empty();
@@ -726,43 +748,67 @@ fn write_report_node(
     .unwrap();
 
     for result in &node.results {
-        write_result(html, result);
+        write_result(html, result, *result_index, report_dir);
+        *result_index += 1;
     }
     if path == "css" {
         for (child_name, child) in ordered_css_children(node) {
-            write_report_node(html, child_name, child, depth + 1, &format!("{path}/{child_name}"), category_ids);
+            write_report_node(
+                html,
+                child_name,
+                child,
+                depth + 1,
+                &format!("{path}/{child_name}"),
+                category_ids,
+                report_dir,
+                result_index,
+            );
         }
     } else {
         for (child_name, child) in &node.children {
-            write_report_node(html, child_name, child, depth + 1, &format!("{path}/{child_name}"), category_ids);
+            write_report_node(
+                html,
+                child_name,
+                child,
+                depth + 1,
+                &format!("{path}/{child_name}"),
+                category_ids,
+                report_dir,
+                result_index,
+            );
         }
     }
     html.push_str("</div></details>\n");
 }
 
-fn write_result(html: &mut String, result: &ReftestReport) {
-    let test_path = escape_html(&result.test_path);
-    writeln!(
+fn write_result(html: &mut String, result: &ReftestReport, result_index: usize, report_dir: &Path) {
+    write!(
         html,
-        "<article class=\"result {}\" data-status=\"{}\"><p class=\"paths\"><strong>Test:</strong> {test_path}<br><strong>Status:</strong> {}</p>",
+        "<article class=\"result {}\" data-status=\"{}\"><p class=\"paths\"><strong>Test:</strong> ",
         result.status.css_class(),
-        result.status.css_class(),
-        result.status
+        result.status.css_class()
     )
     .unwrap();
+    write_source_link(html, &result.test_source, report_dir);
+    writeln!(html, "<br><strong>Status:</strong> {}</p>", result.status).unwrap();
     writeln!(html, "<p class=\"reason\"><strong>Reason:</strong> {}</p>", escape_html(&result.reason)).unwrap();
+    write_source_tabs(html, result, result_index, report_dir);
     for (index, reference) in result.references.iter().enumerate() {
-        let reference_path = escape_html(&reference.reference_path);
-        writeln!(
+        write!(
             html,
-            "<section class=\"reference-result {}\"><h4>Reference {}: {} ({})</h4><p class=\"paths\"><strong>Reference:</strong> {reference_path}<br><strong>Status:</strong> {}</p>",
+            "<section class=\"reference-result {}\"><h4>Reference {}: {} ({})</h4><p class=\"paths\"><strong>Expected/reference:</strong> ",
             reference.status.css_class(),
             index + 1,
             reference.relation,
-            reference.relation.expectation(),
-            reference.status
+            reference.relation.expectation()
         )
         .unwrap();
+        if let Some(source) = result.reference_sources.get(index) {
+            write_source_link(html, source, report_dir);
+        } else {
+            html.push_str("Unavailable");
+        }
+        writeln!(html, "<br><strong>Status:</strong> {}</p>", reference.status).unwrap();
         writeln!(html, "<p class=\"reason\"><strong>Reason:</strong> {}</p>", escape_html(&reference.reason)).unwrap();
         if let (Some(difference), Some(fuzzy)) = (reference.difference, reference.fuzzy) {
             writeln!(
@@ -796,6 +842,62 @@ fn write_result(html: &mut String, result: &ReftestReport) {
     html.push_str("</article>\n");
 }
 
+fn write_source_tabs(html: &mut String, result: &ReftestReport, result_index: usize, report_dir: &Path) {
+    let mut sources = Vec::with_capacity(result.reference_sources.len() + 1);
+    sources.push(("Test".to_string(), &result.test_source));
+    sources.extend(
+        result.reference_sources.iter().enumerate().map(|(index, source)| (format!("Expected {}", index + 1), source)),
+    );
+
+    html.push_str("<details class=\"source-view\"><summary>Source code</summary><div class=\"source-view-body\">");
+    write!(
+        html,
+        "<div class=\"source-tabs\" role=\"tablist\" aria-label=\"Source code for {}\">",
+        escape_html(&result.name)
+    )
+    .unwrap();
+    for (source_index, (label, _)) in sources.iter().enumerate() {
+        let selected = source_index == 0;
+        write!(
+            html,
+            "<button id=\"source-{result_index}-tab-{source_index}\" type=\"button\" role=\"tab\" aria-selected=\"{selected}\" aria-controls=\"source-{result_index}-panel-{source_index}\"{}>{}</button>",
+            if selected { "" } else { " tabindex=\"-1\"" },
+            escape_html(label)
+        )
+        .unwrap();
+    }
+    html.push_str("</div>");
+
+    for (source_index, (_, source)) in sources.iter().enumerate() {
+        write!(
+            html,
+            "<section id=\"source-{result_index}-panel-{source_index}\" class=\"source-panel\" role=\"tabpanel\" aria-labelledby=\"source-{result_index}-tab-{source_index}\"{}><p class=\"source-path\">",
+            if source_index == 0 { "" } else { " hidden" }
+        )
+        .unwrap();
+        write_source_link(html, source, report_dir);
+        html.push_str("</p>");
+        match fs::read(&source.file_path) {
+            Ok(bytes) => {
+                let code = String::from_utf8_lossy(&bytes);
+                write!(html, "<pre class=\"source-code\"><code>{}</code></pre>", escape_html(&code)).unwrap();
+            }
+            Err(error) => {
+                write!(html, "<p class=\"missing\">Source unavailable: {}</p>", escape_html(&error.to_string()))
+                    .unwrap();
+            }
+        }
+        html.push_str("</section>");
+    }
+    html.push_str("</div></details>\n");
+}
+
+fn write_source_link(html: &mut String, source: &SourceReport, report_dir: &Path) {
+    let href = escape_html(&source_href(&source.file_path, report_dir));
+    let display_path = escape_html(&source.display_path);
+    write!(html, "<a href=\"{href}\" target=\"_blank\" rel=\"noopener\">{display_path}</a>").unwrap();
+}
+
 fn write_image(html: &mut String, title: &str, description: &str, image: Option<&str>) {
     write!(html, "<figure><figcaption>{title}</figcaption>").unwrap();
     if let Some(image) = image {
@@ -808,6 +910,56 @@ fn write_image(html: &mut String, title: &str, description: &str, image: Option<
         write!(html, "<p class=\"missing\">{description} unavailable</p>").unwrap();
     }
     html.push_str("</figure>");
+}
+
+fn source_href(source_path: &Path, report_dir: &Path) -> String {
+    let source_path = absolute_path(source_path);
+    let report_dir = absolute_path(report_dir);
+    if let Some(relative) = relative_path(&report_dir, &source_path) {
+        return encode_href_path(&relative.to_string_lossy().replace('\\', "/"));
+    }
+    url::Url::from_file_path(source_path).map_or_else(|_| "#".to_string(), Into::into)
+}
+
+fn absolute_path(path: &Path) -> PathBuf {
+    let path = if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        std::env::current_dir().map_or_else(|_| path.to_path_buf(), |current| current.join(path))
+    };
+    fs::canonicalize(&path).unwrap_or(path)
+}
+
+fn relative_path(from_dir: &Path, target: &Path) -> Option<PathBuf> {
+    let from = from_dir.components().collect::<Vec<_>>();
+    let target = target.components().collect::<Vec<_>>();
+    let common = from.iter().zip(&target).take_while(|(left, right)| left == right).count();
+    if common == 0 {
+        return None;
+    }
+
+    let mut relative = PathBuf::new();
+    for component in &from[common..] {
+        if matches!(component, std::path::Component::Normal(_) | std::path::Component::ParentDir) {
+            relative.push("..");
+        }
+    }
+    for component in &target[common..] {
+        relative.push(component.as_os_str());
+    }
+    Some(relative)
+}
+
+fn encode_href_path(path: &str) -> String {
+    let mut encoded = String::with_capacity(path.len());
+    for byte in path.bytes() {
+        if byte.is_ascii_alphanumeric() || matches!(byte, b'/' | b'-' | b'_' | b'.' | b'~') {
+            encoded.push(byte as char);
+        } else {
+            write!(encoded, "%{byte:02X}").unwrap();
+        }
+    }
+    encoded
 }
 
 fn escape_html(value: &str) -> String {
@@ -848,7 +1000,8 @@ mod tests {
     fn status_manifest_is_relative_sorted_and_uses_three_states() {
         let result = |name: &str, status| ReftestReport {
             name: name.to_string(),
-            test_path: String::new(),
+            test_source: SourceReport { display_path: name.to_string(), file_path: PathBuf::from(name) },
+            reference_sources: Vec::new(),
             status,
             reason: String::new(),
             actual_image: None,
