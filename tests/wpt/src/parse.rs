@@ -28,8 +28,9 @@ use vello_cpu::RenderContext;
 use crate::CssLengthPercentage;
 use crate::paint::measure_content;
 use crate::{
-    AhemFont, Color, Declaration, Document, NodeContext, RenderStyle, Rule, RuleSelector, VIEWPORT_HEIGHT,
-    VIEWPORT_WIDTH, WritingMode, build_node, declarations_from_block, matching_declarations_for, parse_declarations,
+    AhemFont, Color, Declaration, Document, NodeContext, RenderStyle, Rule, RuleSelector, TextAlignment,
+    VIEWPORT_HEIGHT, VIEWPORT_WIDTH, WritingMode, build_node, declarations_from_block, matching_declarations_for,
+    parse_declarations,
 };
 use gummy::prelude::{FromFr, GummyAuto, GummyFitContent, GummyGridLine, GummyMaxContent, GummyMinContent, GummyZero};
 use gummy::{
@@ -576,6 +577,18 @@ fn apply_typed_property(
         Property::WhiteSpace(value) => {
             use lightningcss::properties::text::WhiteSpace;
             render_style.white_space_nowrap = matches!(value, WhiteSpace::NoWrap | WhiteSpace::Pre);
+        }
+        Property::TextAlign(value) => {
+            use lightningcss::properties::text::TextAlign;
+            render_style.text_alignment = match value {
+                TextAlign::Start => TextAlignment::Start,
+                TextAlign::End => TextAlignment::End,
+                TextAlign::Left => TextAlignment::Left,
+                TextAlign::Right => TextAlignment::Right,
+                TextAlign::Center => TextAlignment::Center,
+                TextAlign::Justify | TextAlign::JustifyAll => TextAlignment::Justify,
+                TextAlign::MatchParent => render_style.text_alignment,
+            };
         }
         Property::Width(value) => set_if_some(css_dimension(value, font_size), |value| style.size.width = value),
         Property::Height(value) => set_if_some(css_dimension(value, font_size), |value| style.size.height = value),
@@ -1218,7 +1231,7 @@ pub fn is_css_wide_keyword(value: &str) -> bool {
 }
 
 pub fn is_inherited_property(property: &str) -> bool {
-    matches!(property, "color" | "direction" | "font-size" | "white-space" | "writing-mode")
+    matches!(property, "color" | "direction" | "font-size" | "text-align" | "white-space" | "writing-mode")
 }
 
 pub fn apply_inherited_value(
@@ -1234,6 +1247,7 @@ pub fn apply_inherited_value(
             render_style.direction = inherited.direction;
         }
         "font-size" => render_style.font_size = inherited.font_size,
+        "text-align" => render_style.text_alignment = inherited.text_alignment,
         "white-space" => render_style.white_space_nowrap = inherited.white_space_nowrap,
         "writing-mode" => render_style.writing_mode = inherited.writing_mode,
         _ => {}
@@ -1295,6 +1309,7 @@ pub fn initial_property_value(property: &str) -> Option<&'static str> {
         "background-color" => "transparent",
         "color" => "black",
         "font-size" => "medium",
+        "text-align" => "start",
         "white-space" => "normal",
         "writing-mode" => "horizontal-tb",
         "grid-template-rows" | "grid-template-columns" | "grid-template-areas" => "none",

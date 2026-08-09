@@ -72,6 +72,7 @@ pub struct RenderStyle {
     is_inline: bool,
     is_table: bool,
     image: Option<Arc<Pixmap>>,
+    text_alignment: TextAlignment,
     white_space_nowrap: bool,
     writing_mode: WritingMode,
 }
@@ -88,6 +89,7 @@ impl Default for RenderStyle {
             is_inline: false,
             is_table: false,
             image: None,
+            text_alignment: TextAlignment::Start,
             white_space_nowrap: false,
             writing_mode: WritingMode::HorizontalTb,
         }
@@ -100,6 +102,7 @@ impl RenderStyle {
             color: parent.color,
             direction: parent.direction,
             font_size: parent.font_size,
+            text_alignment: parent.text_alignment,
             white_space_nowrap: parent.white_space_nowrap,
             writing_mode: parent.writing_mode,
             ..Self::default()
@@ -116,7 +119,50 @@ pub struct NodeContext {
 #[derive(Clone)]
 pub struct AhemTextLayout {
     layout: Layout<()>,
+    text_alignment: TextAlignment,
     writing_mode: WritingMode,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum TextAlignment {
+    Start,
+    End,
+    Left,
+    Right,
+    Center,
+    Justify,
+}
+
+impl TextAlignment {
+    pub(crate) fn parley(self) -> parley::layout::Alignment {
+        match self {
+            Self::Start => parley::layout::Alignment::Start,
+            Self::End => parley::layout::Alignment::End,
+            Self::Left => parley::layout::Alignment::Left,
+            Self::Right => parley::layout::Alignment::Right,
+            Self::Center => parley::layout::Alignment::Center,
+            Self::Justify => parley::layout::Alignment::Justify,
+        }
+    }
+
+    fn justify_content(self, direction: gummy::Direction) -> Option<gummy::JustifyContent> {
+        match self {
+            Self::Start => Some(gummy::JustifyContent::START),
+            Self::End => Some(gummy::JustifyContent::END),
+            Self::Left => Some(if direction == gummy::Direction::Ltr {
+                gummy::JustifyContent::START
+            } else {
+                gummy::JustifyContent::END
+            }),
+            Self::Right => Some(if direction == gummy::Direction::Ltr {
+                gummy::JustifyContent::END
+            } else {
+                gummy::JustifyContent::START
+            }),
+            Self::Center => Some(gummy::JustifyContent::CENTER),
+            Self::Justify => None,
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -154,9 +200,10 @@ impl NodeContext {
         Self { text: None, image: Some(image) }
     }
 
-    pub fn text(
+    pub(crate) fn text(
         text: String,
         font_size: f32,
+        text_alignment: TextAlignment,
         writing_mode: WritingMode,
         font_context: &mut FontContext,
         layout_context: &mut LayoutContext<()>,
@@ -165,7 +212,7 @@ impl NodeContext {
         builder.push_default(StyleProperty::FontStack(FontStack::Single(FontFamily::Named(Cow::Borrowed("Ahem")))));
         builder.push_default(StyleProperty::FontSize(font_size));
         let layout = builder.build(&text);
-        Self { text: Some(AhemTextLayout { layout, writing_mode }), image: None }
+        Self { text: Some(AhemTextLayout { layout, text_alignment, writing_mode }), image: None }
     }
 }
 
@@ -945,6 +992,7 @@ pub fn build_node(
                 let node_context = NodeContext::text(
                     text,
                     inherited.font_size,
+                    inherited.text_alignment,
                     inherited.writing_mode,
                     &mut document.font_context,
                     &mut document.layout_context,
@@ -1075,6 +1123,9 @@ pub fn build_element(
     if inline_formatting_context {
         style.display = Display::Flex;
         style.flex_wrap = if render_style.white_space_nowrap { gummy::FlexWrap::NoWrap } else { gummy::FlexWrap::Wrap };
+        if let Some(justify_content) = render_style.text_alignment.justify_content(render_style.direction) {
+            style.justify_content = Some(justify_content);
+        }
     }
 
     if style.display == Display::Flex {

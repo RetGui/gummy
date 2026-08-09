@@ -365,7 +365,7 @@ fn compute_preliminary(tree: &mut impl LayoutFlexboxContainer, node: NodeId, inp
 
     // 9.6. Cross-Axis Alignment
 
-    // 13. Resolve cross-axis auto margins (also includes 14).
+    // 13 and 14. Resolve cross-axis auto margins.
     debug_log!("resolve_cross_axis_auto_margins");
     resolve_cross_axis_auto_margins(&mut flex_lines, &constants);
 

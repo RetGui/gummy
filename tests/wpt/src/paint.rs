@@ -3,7 +3,7 @@ use std::path::Path;
 use std::sync::Arc;
 
 use anyhow::Context;
-use parley::PositionedLayoutItem;
+use parley::{PositionedLayoutItem, layout::AlignmentOptions};
 
 use vello_cpu::{Image, ImageSource, Pixmap, RenderContext, Resources, kurbo};
 
@@ -129,6 +129,7 @@ pub fn paint_parley_text(
     let mut layout = text.layout.clone();
     let inline_size = if text.writing_mode.is_vertical() { height } else { width };
     layout.break_all_lines(Some(inline_size.max(0.0)));
+    layout.align(Some(inline_size.max(0.0)), text.text_alignment.parley(), AlignmentOptions::default());
     let transform = match text.writing_mode {
         WritingMode::HorizontalTb => kurbo::Affine::translate((x as f64, y as f64)),
         WritingMode::VerticalRl => {
