@@ -330,6 +330,7 @@ impl Layout {
         f32_max(
             0.0,
             self.content_size.width + f32_min(self.scrollbar_size.width, self.size.width) - self.size.width
+                + self.border.left
                 + self.border.right,
         )
     }
@@ -340,6 +341,7 @@ impl Layout {
         f32_max(
             0.0,
             self.content_size.height + f32_min(self.scrollbar_size.height, self.size.height) - self.size.height
+                + self.border.top
                 + self.border.bottom,
         )
     }
