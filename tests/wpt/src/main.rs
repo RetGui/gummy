@@ -1001,30 +1001,29 @@ pub fn build_node(
         Node::Element(element) => build_element(node_ref, element, rules, inherited, document),
         Node::Text(text) => {
             let text = collapse_text(text);
-            if text.is_empty() {
-                Ok(None)
-            } else {
-                let style = Style::default();
-                let node_context = NodeContext::text(
-                    text,
-                    inherited.font_size,
-                    inherited.overflow_wrap,
-                    inherited.text_alignment,
-                    inherited.white_space_nowrap,
-                    inherited.word_break,
-                    inherited.writing_mode,
-                    &mut document.font_context,
-                    &mut document.layout_context,
-                );
-                let node = document.tree.new_leaf_with_context(style, node_context)?;
-                let mut render_style = RenderStyle::inherit_from(inherited);
-                render_style.is_inline = true;
-                document.paint.insert(node, render_style);
-                Ok(Some(node))
-            }
+            if text.is_empty() { Ok(None) } else { build_text_leaf(text, inherited, document).map(Some) }
         }
         _ => Ok(None),
     }
+}
+
+fn build_text_leaf(text: String, inherited: &RenderStyle, document: &mut Document) -> Result<NodeId> {
+    let node_context = NodeContext::text(
+        text,
+        inherited.font_size,
+        inherited.overflow_wrap,
+        inherited.text_alignment,
+        inherited.white_space_nowrap,
+        inherited.word_break,
+        inherited.writing_mode,
+        &mut document.font_context,
+        &mut document.layout_context,
+    );
+    let node = document.tree.new_leaf_with_context(Style::default(), node_context)?;
+    let mut render_style = RenderStyle::inherit_from(inherited);
+    render_style.is_inline = true;
+    document.paint.insert(node, render_style);
+    Ok(node)
 }
 
 pub fn build_element(
@@ -1122,15 +1121,28 @@ pub fn build_element(
     }
     finalize_border_widths(&mut style, &render_style);
 
-    let mut children = Vec::new();
     let next_inherited = render_style.clone();
-    for child in node_ref.children() {
-        if let Some(child_id) = build_node(child, rules, &next_inherited, document)? {
-            children.push(child_id);
+    // Flex approximates an inline formatting context in this renderer, but separate flex items cannot wrap across
+    // markup boundaries. Give transparent inline wrappers to Parley as one text run so it can wrap the line normally.
+    let flattened_text =
+        if style.display == Display::Block && matching_declarations_for(&element_ref, rules, true).is_empty() {
+            flattened_inline_text(node_ref, rules)
+        } else {
+            None
+        };
+
+    let mut children = Vec::new();
+    if let Some(text) = flattened_text {
+        children.push(build_text_leaf(text, &next_inherited, document)?);
+    } else {
+        for child in node_ref.children() {
+            if let Some(child_id) = build_node(child, rules, &next_inherited, document)? {
+                children.push(child_id);
+            }
         }
-    }
-    if let Some(after) = build_after_pseudo(&element_ref, rules, &next_inherited, document)? {
-        children.push(after);
+        if let Some(after) = build_after_pseudo(&element_ref, rules, &next_inherited, document)? {
+            children.push(after);
+        }
     }
 
     let inline_formatting_context = style.display == Display::Block
@@ -1197,10 +1209,85 @@ fn apply_user_agent_defaults(name: &str, style: &mut Style, render_style: &mut R
             style.margin.top = LengthPercentageAuto::length(font_size);
             style.margin.bottom = LengthPercentageAuto::length(font_size);
         }
-        "a" | "abbr" | "b" | "bdi" | "bdo" | "cite" | "code" | "data" | "del" | "dfn" | "em" | "i" | "ins" | "kbd"
-        | "mark" | "q" | "ruby" | "s" | "samp" | "small" | "span" | "strike" | "strong" | "sub" | "sup" | "time"
-        | "u" | "var" => render_style.is_inline = true,
+        name if is_default_inline_element(name) => render_style.is_inline = true,
         _ => {}
+    }
+}
+
+fn is_default_inline_element(name: &str) -> bool {
+    matches!(
+        name,
+        "a" | "abbr"
+            | "b"
+            | "bdi"
+            | "bdo"
+            | "cite"
+            | "code"
+            | "data"
+            | "del"
+            | "dfn"
+            | "em"
+            | "i"
+            | "ins"
+            | "kbd"
+            | "mark"
+            | "q"
+            | "ruby"
+            | "s"
+            | "samp"
+            | "small"
+            | "span"
+            | "strike"
+            | "strong"
+            | "sub"
+            | "sup"
+            | "time"
+            | "u"
+            | "var"
+    )
+}
+
+fn flattened_inline_text(node_ref: ego_tree::NodeRef<Node>, rules: &[Rule]) -> Option<String> {
+    let mut raw_text = String::new();
+    let mut saw_inline_wrapper = false;
+    for child in node_ref.children() {
+        if !collect_transparent_inline_text(child, rules, &mut raw_text, &mut saw_inline_wrapper) {
+            return None;
+        }
+    }
+
+    if !saw_inline_wrapper {
+        return None;
+    }
+    let text = collapse_text(&raw_text);
+    (!text.is_empty()).then_some(text)
+}
+
+fn collect_transparent_inline_text(
+    node_ref: ego_tree::NodeRef<Node>,
+    rules: &[Rule],
+    raw_text: &mut String,
+    saw_inline_wrapper: &mut bool,
+) -> bool {
+    match node_ref.value() {
+        Node::Text(text) => {
+            raw_text.push_str(text);
+            true
+        }
+        Node::Comment(_) => true,
+        Node::Element(element) if is_default_inline_element(element.name()) => {
+            let element_ref = ElementRef::wrap(node_ref).expect("element nodes must produce an ElementRef");
+            if element.attr("style").is_some()
+                || !matching_declarations(&element_ref, rules).is_empty()
+                || !matching_declarations_for(&element_ref, rules, true).is_empty()
+            {
+                return false;
+            }
+
+            *saw_inline_wrapper = true;
+            node_ref.children().all(|child| collect_transparent_inline_text(child, rules, raw_text, saw_inline_wrapper))
+        }
+        _ => false,
     }
 }
 
@@ -1223,6 +1310,31 @@ mod user_agent_style_tests {
         let mut strong = RenderStyle::default();
         apply_user_agent_defaults("strong", &mut Style::default(), &mut strong, 16.0);
         assert!(strong.is_inline);
+    }
+
+    #[test]
+    fn flattens_unstyled_inline_text_before_collapsing_whitespace() {
+        let document = Html::parse_fragment(
+            "<p>Test passes if a filled blue square is in the <strong>upper-left corner</strong> \
+             of an hollow black square and if there is <strong>no red</strong>.</p>",
+        );
+        let paragraph = document.select(&Selector::parse("p").unwrap()).next().unwrap();
+
+        assert_eq!(
+            flattened_inline_text(*paragraph, &[]).as_deref(),
+            Some(
+                "Test passes if a filled blue square is in the upper-left corner of an hollow black square and if \
+                 there is no red."
+            )
+        );
+    }
+
+    #[test]
+    fn keeps_styled_inline_content_as_separate_layout_items() {
+        let document = Html::parse_fragment("<p>prefix <strong style=\"color: red\">middle</strong> suffix</p>");
+        let paragraph = document.select(&Selector::parse("p").unwrap()).next().unwrap();
+
+        assert_eq!(flattened_inline_text(*paragraph, &[]), None);
     }
 }
 
