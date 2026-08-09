@@ -314,5 +314,6 @@ fn build_style<S: CheapCloneStr>(xnode: roxmltree::Node) -> gummy::Style<S> {
             start: parse_or_default(xnode.attribute("grid-column-start")),
             end: parse_or_default(xnode.attribute("grid-column-end")),
         },
+        replaced: false,
     }
 }

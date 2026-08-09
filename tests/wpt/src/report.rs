@@ -56,6 +56,7 @@ pub struct ReferenceReport {
     pub difference: Option<PixelDifference>,
     pub fuzzy: Option<FuzzyLimits>,
     pub reference_image: Option<String>,
+    pub difference_image: Option<String>,
 }
 
 impl ReftestReport {
@@ -212,12 +213,67 @@ impl ArtifactWriter {
         Ok(format!("artifacts/{test_dir_name}/{kind}.png"))
     }
 
+    pub fn save_difference_image(
+        &self,
+        index: usize,
+        kind: &str,
+        actual: &[u8],
+        expected: &[u8],
+        width: usize,
+        height: usize,
+    ) -> Result<Option<String>> {
+        let expected_len = width * height * 4;
+        anyhow::ensure!(
+            actual.len() == expected_len && expected.len() == expected_len,
+            "diff buffers must both contain {expected_len} bytes for a {width}x{height} RGBA image"
+        );
+        let Some(image) = difference_image(actual, expected) else {
+            return Ok(None);
+        };
+        self.save_image(index, kind, &image, width, height).map(Some)
+    }
+
     pub fn write_report(&self, results: &[ReftestReport]) -> Result<PathBuf> {
         let path = self.output_dir.join("report.html");
         let html = render_html(results);
         fs::write(&path, html).with_context(|| format!("failed to write WPT report at {}", path.display()))?;
         Ok(path)
     }
+
+    pub fn write_status_manifest(&self, results: &[ReftestReport]) -> Result<PathBuf> {
+        let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("results.txt");
+        fs::write(&path, render_status_manifest(results))
+            .with_context(|| format!("failed to write WPT status manifest at {}", path.display()))?;
+        Ok(path)
+    }
+}
+
+fn render_status_manifest(results: &[ReftestReport]) -> String {
+    let mut entries = results
+        .iter()
+        .map(|result| {
+            let status = match result.status {
+                TestStatus::Pass => "PASS",
+                TestStatus::Skip => "SKIP",
+                TestStatus::Fail | TestStatus::Error => "FAIL",
+            };
+            format!("{} {status}", relative_manifest_name(&result.name))
+        })
+        .collect::<Vec<_>>();
+    entries.sort_unstable_by_key(|entry| entry.to_ascii_lowercase());
+    entries.push(String::new());
+    entries.join("\n")
+}
+
+fn relative_manifest_name(name: &str) -> String {
+    let normalized = name.replace('\\', "/");
+    if let Some((_, relative)) = normalized.rsplit_once("/web-platform-tests/") {
+        return relative.to_string();
+    }
+    if Path::new(name).is_absolute() {
+        return Path::new(name).file_name().and_then(|name| name.to_str()).unwrap_or("unknown-test").to_string();
+    }
+    normalized.trim_start_matches("./").to_string()
 }
 
 fn target_dir() -> PathBuf {
@@ -725,6 +781,14 @@ fn write_result(html: &mut String, result: &ReftestReport) {
                 "Reference render",
                 reference.reference_image.as_deref(),
             );
+            if reference.difference_image.is_some() {
+                write_image(
+                    html,
+                    "Difference",
+                    "Pixel difference; red marks mismatched pixels",
+                    reference.difference_image.as_deref(),
+                );
+            }
             html.push_str("</div>");
         }
         html.push_str("</section>\n");
@@ -748,4 +812,57 @@ fn write_image(html: &mut String, title: &str, description: &str, image: Option<
 
 fn escape_html(value: &str) -> String {
     value.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;").replace('"', "&quot;").replace('\'', "&#39;")
+}
+
+fn difference_image(actual: &[u8], expected: &[u8]) -> Option<Vec<u8>> {
+    let mut differs = false;
+    let mut image = Vec::with_capacity(actual.len());
+    for (actual, expected) in actual.chunks_exact(4).zip(expected.chunks_exact(4)) {
+        if actual[..3] != expected[..3] {
+            image.extend_from_slice(&[255, 0, 0, 255]);
+            differs = true;
+        } else {
+            image.extend(actual[..3].iter().map(|channel| ((*channel as u16 + 3 * 255) / 4) as u8));
+            image.push(255);
+        }
+    }
+    differs.then_some(image)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn difference_image_marks_mismatches_red_over_faded_context() {
+        let actual = [0, 0, 0, 255, 0, 128, 0, 255];
+        let expected = [0, 0, 0, 255, 0, 0, 0, 255];
+
+        let image = difference_image(&actual, &expected).unwrap();
+
+        assert_eq!(image, [191, 191, 191, 255, 255, 0, 0, 255]);
+        assert!(difference_image(&actual, &actual).is_none());
+    }
+
+    #[test]
+    fn status_manifest_is_relative_sorted_and_uses_three_states() {
+        let result = |name: &str, status| ReftestReport {
+            name: name.to_string(),
+            test_path: String::new(),
+            status,
+            reason: String::new(),
+            actual_image: None,
+            references: Vec::new(),
+        };
+        let results = [
+            result("css/z-last.html", TestStatus::Error),
+            result(r"C:\Users\someone\repo\web-platform-tests\css\a-first.html", TestStatus::Pass),
+            result("css/m-middle.html", TestStatus::Skip),
+        ];
+
+        assert_eq!(
+            render_status_manifest(&results),
+            "css/a-first.html PASS\ncss/m-middle.html SKIP\ncss/z-last.html FAIL\n"
+        );
+    }
 }
