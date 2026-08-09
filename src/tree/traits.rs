@@ -198,6 +198,9 @@ pub trait LayoutPartialTree: TraversePartialTree {
 
     /// Compute the specified node's size or full layout given the specified constraints
     fn compute_child_layout(&mut self, node_id: NodeId, inputs: LayoutInput) -> LayoutOutput;
+
+    /// Compute the node's intrinsic size.
+    fn measure_intrinsic_size(&mut self, node_id: NodeId) -> Size<f32>;
 }
 
 /// Trait used by the `compute_cached_layout` method which allows cached layout results to be stored and retrieved.

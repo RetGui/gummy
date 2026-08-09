@@ -174,6 +174,11 @@ pub trait CoreStyle {
     fn border(&self) -> Rect<LengthPercentage> {
         Style::<Self::CustomIdent>::DEFAULT.border
     }
+    /// Determines if the element has replaced content such as an image.
+    #[inline(always)]
+    fn replaced(&self) -> bool {
+        false
+    }
 }
 
 /// Sets the layout used for the children of this node
@@ -582,6 +587,8 @@ pub struct Style<S: CheapCloneStr = DefaultCheapStr> {
     /// Defines which column in the grid the item should start and end at
     #[cfg(feature = "grid")]
     pub grid_column: Line<GridPlacement<S>>,
+    /// Determines if the element has replaced content such as an image.
+    pub replaced: bool,
 }
 
 impl<S: CheapCloneStr> Style<S> {
@@ -658,6 +665,7 @@ impl<S: CheapCloneStr> Style<S> {
         grid_row: Line { start: GridPlacement::<S>::Auto, end: GridPlacement::<S>::Auto },
         #[cfg(feature = "grid")]
         grid_column: Line { start: GridPlacement::<S>::Auto, end: GridPlacement::<S>::Auto },
+        replaced: false,
     };
 }
 
@@ -738,6 +746,10 @@ impl<S: CheapCloneStr> CoreStyle for Style<S> {
     fn border(&self) -> Rect<LengthPercentage> {
         self.border
     }
+    #[inline(always)]
+    fn replaced(&self) -> bool {
+        self.replaced
+    }
 }
 
 impl<T: CoreStyle> CoreStyle for &'_ T {
@@ -806,6 +818,10 @@ impl<T: CoreStyle> CoreStyle for &'_ T {
     #[inline(always)]
     fn border(&self) -> Rect<LengthPercentage> {
         (*self).border()
+    }
+    #[inline(always)]
+    fn replaced(&self) -> bool {
+        (*self).replaced()
     }
 }
 
@@ -1270,6 +1286,7 @@ mod tests {
             grid_row: Line { start: GridPlacement::Auto, end: GridPlacement::Auto },
             #[cfg(feature = "grid")]
             grid_column: Line { start: GridPlacement::Auto, end: GridPlacement::Auto },
+            replaced: false,
         };
 
         assert_eq!(Style::DEFAULT, Style::<DefaultCheapStr>::default());

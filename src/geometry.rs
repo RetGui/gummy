@@ -296,6 +296,12 @@ impl Rect<f32> {
     pub const fn new(start: f32, end: f32, top: f32, bottom: f32) -> Self {
         Self { left: start, right: end, top, bottom }
     }
+
+    /// Creates a new Rect from a horizontal and vertical line.
+    #[must_use]
+    pub const fn from_lines(horizontal: Line<f32>, vertical: Line<f32>) -> Self {
+        Self { left: horizontal.start, right: horizontal.end, top: vertical.start, bottom: vertical.end }
+    }
 }
 
 /// An abstract "line". Represents any type that has a start and an end
@@ -558,6 +564,26 @@ impl Size<f32> {
     #[inline(always)]
     pub fn has_non_zero_area(self) -> bool {
         self.width > 0.0 && self.height > 0.0
+    }
+
+    /// Decode intrinsic size data.
+    pub fn decode_intrinsic_derived(&self) -> (Option<f32>, Option<f32>, Option<f32>) {
+        let width = if self.width.is_finite() && self.width >= 0.0 { Some(self.width) } else { None };
+        let height = if self.height.is_finite() && self.height >= 0.0 { Some(self.height) } else { None };
+
+        let mut aspect_ratio = None;
+
+        if self.width < 0.0 {
+            aspect_ratio = Some(-self.width);
+        } else if self.height < 0.0 {
+            aspect_ratio = Some(-self.height);
+        } else if let (Some(w), Some(h)) = (width, height) {
+            if h != 0.0 {
+                aspect_ratio = Some(w / h);
+            }
+        }
+
+        (width, height, aspect_ratio)
     }
 }
 
