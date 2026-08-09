@@ -9,8 +9,13 @@ data-url = "0.3"
 ego-tree = "0.10"
 gummy = { path = "../..", features = ["parse"] }
 lightningcss = { version = "=1.0.0-alpha.72", default-features = false, features = ["into_owned"] }
+parley = { version = "0.7", default-features = false, features = ["std"] }
 png = "0.18"
 scraper = "0.24"
 svgtypes = "0.16"
+thirtyfour = { version = "0.37.4", default-features = false, features = ["manager"] }
+tiny_http = "0.12"
+tokio = { version = "1", features = ["rt", "time"] }
+url = "2"
 usvg = { version = "0.47", default-features = false }
 vello_cpu = "0.2.0"

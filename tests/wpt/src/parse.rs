@@ -28,8 +28,8 @@ use vello_cpu::RenderContext;
 use crate::CssLengthPercentage;
 use crate::paint::measure_content;
 use crate::{
-    Color, Declaration, Document, NodeContext, RenderStyle, Rule, RuleSelector, VIEWPORT_HEIGHT, VIEWPORT_WIDTH,
-    WritingMode, build_node, declarations_from_block, matching_declarations_for, parse_declarations,
+    AhemFont, Color, Declaration, Document, NodeContext, RenderStyle, Rule, RuleSelector, VIEWPORT_HEIGHT,
+    VIEWPORT_WIDTH, WritingMode, build_node, declarations_from_block, matching_declarations_for, parse_declarations,
 };
 use gummy::prelude::{FromFr, GummyAuto, GummyFitContent, GummyGridLine, GummyMaxContent, GummyMinContent, GummyZero};
 use gummy::{
@@ -38,10 +38,19 @@ use gummy::{
     MinTrackSizingFunction, NodeId, Point, Rect, RepetitionCount, Size, Style, TrackSizingFunction,
 };
 
-pub fn parse_and_layout_with_path(html: &str, source_path: Option<&Path>) -> anyhow::Result<Document> {
+pub fn parse_and_layout_with_path(
+    html: &str,
+    source_path: Option<&Path>,
+    ahem_font: &AhemFont,
+) -> anyhow::Result<Document> {
     let document = Html::parse_document(html);
     let rules = parse_document_rules_with_path(&document, source_path)?;
     let root_element = document.root_element();
+
+    let mut font_context = parley::FontContext::new();
+    if font_context.collection.register_fonts(ahem_font.blob(), None).is_empty() {
+        return Err(anyhow!("failed to register Ahem font from {}", ahem_font.path().display()));
+    }
 
     let mut render_document = Document {
         tree: GummyTree::new(),
@@ -49,6 +58,8 @@ pub fn parse_and_layout_with_path(html: &str, source_path: Option<&Path>) -> any
         paint: HashMap::new(),
         renderer: RenderContext::new(VIEWPORT_WIDTH as u16, VIEWPORT_HEIGHT as u16),
         source_path: source_path.map(Path::to_path_buf),
+        font_context,
+        layout_context: parley::LayoutContext::new(),
     };
 
     let root_style = Style {

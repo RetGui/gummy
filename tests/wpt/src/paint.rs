@@ -3,11 +3,12 @@ use std::path::Path;
 use std::sync::Arc;
 
 use anyhow::Context;
+use parley::PositionedLayoutItem;
 
 use vello_cpu::{Image, ImageSource, Pixmap, RenderContext, Resources, kurbo};
 
 use crate::parse::parse_and_layout_with_path;
-use crate::{Color, Document, ImageMeasureData, NodeContext, WritingMode};
+use crate::{AhemFont, AhemTextLayout, Color, Document, ImageMeasureData, NodeContext, WritingMode};
 use gummy::{AvailableSpace, NodeId, Rect, Size, Style};
 
 pub fn read_html_document(path: &Path) -> anyhow::Result<String> {
@@ -31,7 +32,13 @@ fn decode_utf16(bytes: &[u8], decode: fn([u8; 2]) -> u16) -> String {
     String::from_utf16_lossy(&code_units)
 }
 
-pub fn rasterize_tree(document: &mut Document, node: NodeId, parent_x: f32, parent_y: f32) -> anyhow::Result<()> {
+pub fn rasterize_tree(
+    document: &mut Document,
+    resources: &mut Resources,
+    node: NodeId,
+    parent_x: f32,
+    parent_y: f32,
+) -> anyhow::Result<()> {
     let layout = *document.tree.layout(node)?;
     let x = parent_x + layout.location.x;
     let y = parent_y + layout.location.y;
@@ -54,35 +61,36 @@ pub fn rasterize_tree(document: &mut Document, node: NodeId, parent_x: f32, pare
 
     let children = document.tree.children(node)?;
     if children.is_empty() {
-        if let Some(text) = &paint.text {
-            paint_ahem_text(
+        if let Some(text) = document.tree.get_node_context(node).and_then(|context| context.text.clone()) {
+            paint_parley_text(
                 &mut document.renderer,
-                x,
-                y,
-                layout.size.width,
-                text,
-                paint.font_size,
-                paint.writing_mode,
+                resources,
+                x + layout.border.left + layout.padding.left,
+                y + layout.border.top + layout.padding.top,
+                layout.content_box_width(),
+                layout.content_box_height(),
+                &text,
                 paint.color,
             );
         }
     } else {
         for child in children {
-            rasterize_tree(document, child, x, y)?;
+            rasterize_tree(document, resources, child, x, y)?;
         }
     }
 
     Ok(())
 }
 
-pub fn render_reftest_document(path: &Path) -> anyhow::Result<Vec<u8>> {
+pub fn render_reftest_document(path: &Path, ahem_font: &AhemFont) -> anyhow::Result<Vec<u8>> {
     let html = read_html_document(path)?;
-    let mut document = parse_and_layout_with_path(&html, Some(path))?;
+    let mut document = parse_and_layout_with_path(&html, Some(path), ahem_font)?;
+    let mut resources = Resources::new();
     let root = document.root;
-    rasterize_tree(&mut document, root, 0.0, 0.0)?;
+    rasterize_tree(&mut document, &mut resources, root, 0.0, 0.0)?;
 
     let mut pixmap = Pixmap::new(document.renderer.width(), document.renderer.height());
-    document.renderer.render(&mut pixmap, &mut Resources::new());
+    document.renderer.render(&mut pixmap, &mut resources);
 
     Ok(pixmap.data_as_u8_slice().to_vec())
 }
@@ -108,34 +116,47 @@ pub fn paint_borders(renderer: &mut RenderContext, x: f32, y: f32, layout: &gumm
     );
 }
 
-#[allow(clippy::too_many_arguments)]
-pub fn paint_ahem_text(
+pub fn paint_parley_text(
     renderer: &mut RenderContext,
+    resources: &mut Resources,
     x: f32,
     y: f32,
     width: f32,
-    text: &str,
-    font_size: f32,
-    writing_mode: WritingMode,
+    height: f32,
+    text: &AhemTextLayout,
     color: Color,
 ) {
-    let glyph = font_size;
-    let glyphs_per_line = (width / glyph).floor().max(1.0) as usize;
-    for (index, ch) in text.chars().enumerate() {
-        if ch == '\n' {
-            continue;
+    let mut layout = text.layout.clone();
+    let inline_size = if text.writing_mode.is_vertical() { height } else { width };
+    layout.break_all_lines(Some(inline_size.max(0.0)));
+    let transform = match text.writing_mode {
+        WritingMode::HorizontalTb => kurbo::Affine::translate((x as f64, y as f64)),
+        WritingMode::VerticalRl => {
+            kurbo::Affine::translate(((x + width) as f64, y as f64))
+                * kurbo::Affine::rotate(std::f64::consts::FRAC_PI_2)
         }
-        let line = index / glyphs_per_line;
-        let column = index % glyphs_per_line;
-        match writing_mode {
-            WritingMode::HorizontalTb => {
-                fill_rect(renderer, x + column as f32 * glyph, y + line as f32 * glyph, glyph, glyph, color)
-            }
-            WritingMode::VerticalRl | WritingMode::VerticalLr => {
-                fill_rect(renderer, x + line as f32 * glyph, y + column as f32 * glyph, glyph, glyph, color)
-            }
+        WritingMode::VerticalLr => kurbo::Affine::new([0.0, 1.0, 1.0, 0.0, x as f64, y as f64]),
+    };
+    renderer.set_transform(transform);
+    renderer.set_paint(color);
+    renderer.set_aliasing_threshold(Some(128));
+    for line in layout.lines() {
+        for item in line.items() {
+            let PositionedLayoutItem::GlyphRun(glyph_run) = item else {
+                continue;
+            };
+            let run = glyph_run.run();
+            let glyphs =
+                glyph_run.positioned_glyphs().map(|glyph| vello_cpu::Glyph { id: glyph.id, x: glyph.x, y: glyph.y });
+            renderer
+                .glyph_run(resources, run.font())
+                .font_size(run.font_size())
+                .normalized_coords(run.normalized_coords())
+                .fill_glyphs(glyphs);
         }
     }
+    renderer.set_aliasing_threshold(None);
+    renderer.reset_transform();
 }
 
 pub fn fill_rect(renderer: &mut RenderContext, x: f32, y: f32, width: f32, height: f32, color: Color) {
@@ -179,24 +200,23 @@ pub fn measure_content(
         return known_dimensions.map(|dimension| dimension.unwrap_or(0.0));
     };
 
-    let glyph = context.font_size;
-    let glyph_count = text.chars().count();
-    let max_inline = glyph_count as f32 * glyph;
-    let min_inline =
-        text.split_whitespace().map(|word| word.chars().count()).max().unwrap_or(glyph_count).max(1) as f32 * glyph;
-    let inline = known_dimensions
-        .width
-        .unwrap_or_else(|| match available_space.width {
-            AvailableSpace::Definite(width) => width.min(max_inline),
-            AvailableSpace::MinContent => min_inline,
-            AvailableSpace::MaxContent => max_inline,
-        })
-        .max(glyph.min(max_inline));
-    let glyphs_per_line = (inline / glyph).floor().max(1.0) as usize;
-    let line_count = glyph_count.div_ceil(glyphs_per_line).max(1);
-    let block = known_dimensions.height.unwrap_or(line_count as f32 * glyph);
+    let (known_inline, known_block, available_inline) = match text.writing_mode {
+        WritingMode::HorizontalTb => (known_dimensions.width, known_dimensions.height, available_space.width),
+        WritingMode::VerticalRl | WritingMode::VerticalLr => {
+            (known_dimensions.height, known_dimensions.width, available_space.height)
+        }
+    };
+    let content_widths = text.layout.calculate_content_widths();
+    let inline = known_inline.unwrap_or_else(|| match available_inline {
+        AvailableSpace::Definite(width) => width.clamp(content_widths.min, content_widths.max),
+        AvailableSpace::MinContent => content_widths.min,
+        AvailableSpace::MaxContent => content_widths.max,
+    });
+    let mut layout = text.layout.clone();
+    layout.break_all_lines(Some(inline.max(0.0)));
+    let block = known_block.unwrap_or_else(|| layout.height());
 
-    match context.writing_mode {
+    match text.writing_mode {
         WritingMode::HorizontalTb => Size { width: inline, height: block },
         WritingMode::VerticalRl | WritingMode::VerticalLr => Size { width: block, height: inline },
     }

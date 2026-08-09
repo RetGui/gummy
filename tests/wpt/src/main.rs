@@ -1,3 +1,4 @@
+mod chrome;
 pub mod cli;
 pub mod paint;
 pub mod parse;
@@ -9,6 +10,7 @@ use anyhow::{Context, Result, anyhow, bail};
 use data_url::DataUrl;
 
 use std::{
+    borrow::Cow,
     collections::HashMap,
     env, fmt, fs,
     io::Cursor,
@@ -29,6 +31,11 @@ use lightningcss::{
     traits::{IntoOwned, ToCss},
     values::length::LengthPercentage as CssLengthPercentage,
 };
+use parley::{
+    FontContext, Layout, LayoutContext,
+    fontique::Blob,
+    style::{FontFamily, FontStack, StyleProperty},
+};
 use scraper::{
     ElementRef, Html, Selector,
     node::{Element, Node},
@@ -37,6 +44,7 @@ use svgtypes::{Length as SvgLength, LengthUnit as SvgLengthUnit, ViewBox as SvgV
 use vello_cpu::peniko::Color;
 use vello_cpu::{Pixmap, RenderContext};
 
+use crate::chrome::ChromeReferenceRenderer;
 use crate::cli::{Args, RunMode};
 use crate::paint::{read_html_document, render_reftest_document};
 use crate::parse::finalize_border_widths;
@@ -46,7 +54,7 @@ use crate::parse::typed_initial_value;
 use crate::parse::{apply_declaration, declaration_direction, declaration_font_size};
 use crate::report::{ArtifactWriter, ReferenceReport, ReftestReport, TestStatus};
 use gummy::prelude::{GummyAuto, GummyZero};
-use gummy::{Dimension, Display, GummyTree, NodeId, Rect, Style};
+use gummy::{Dimension, Display, GummyTree, LengthPercentageAuto, NodeId, Rect, Style};
 
 const VIEWPORT_WIDTH: usize = 800;
 const VIEWPORT_HEIGHT: usize = 600;
@@ -66,7 +74,6 @@ pub struct RenderStyle {
     image: Option<Arc<Pixmap>>,
     white_space_nowrap: bool,
     writing_mode: WritingMode,
-    text: Option<String>,
 }
 
 impl Default for RenderStyle {
@@ -83,7 +90,6 @@ impl Default for RenderStyle {
             image: None,
             white_space_nowrap: false,
             writing_mode: WritingMode::HorizontalTb,
-            text: None,
         }
     }
 }
@@ -101,12 +107,32 @@ impl RenderStyle {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct NodeContext {
-    text: Option<String>,
+    text: Option<AhemTextLayout>,
     image: Option<ImageMeasureData>,
-    font_size: f32,
+}
+
+#[derive(Clone)]
+pub struct AhemTextLayout {
+    layout: Layout<()>,
     writing_mode: WritingMode,
+}
+
+#[derive(Clone, Debug)]
+pub struct AhemFont {
+    path: PathBuf,
+    data: Arc<Vec<u8>>,
+}
+
+impl AhemFont {
+    pub fn path(&self) -> &Path {
+        &self.path
+    }
+
+    pub fn blob(&self) -> Blob<u8> {
+        Blob::new(self.data.clone())
+    }
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -121,15 +147,25 @@ impl ImageMeasureData {
 
 impl NodeContext {
     pub fn element() -> Self {
-        Self { text: None, image: None, font_size: 16.0, writing_mode: WritingMode::HorizontalTb }
+        Self { text: None, image: None }
     }
 
     pub fn image(image: ImageMeasureData) -> Self {
-        Self { text: None, image: Some(image), font_size: 16.0, writing_mode: WritingMode::HorizontalTb }
+        Self { text: None, image: Some(image) }
     }
 
-    pub fn text(text: String, font_size: f32, writing_mode: WritingMode) -> Self {
-        Self { text: Some(text), image: None, font_size, writing_mode }
+    pub fn text(
+        text: String,
+        font_size: f32,
+        writing_mode: WritingMode,
+        font_context: &mut FontContext,
+        layout_context: &mut LayoutContext<()>,
+    ) -> Self {
+        let mut builder = layout_context.ranged_builder(font_context, &text, 1.0, true);
+        builder.push_default(StyleProperty::FontStack(FontStack::Single(FontFamily::Named(Cow::Borrowed("Ahem")))));
+        builder.push_default(StyleProperty::FontSize(font_size));
+        let layout = builder.build(&text);
+        Self { text: Some(AhemTextLayout { layout, writing_mode }), image: None }
     }
 }
 
@@ -183,6 +219,8 @@ pub struct Document {
     paint: HashMap<NodeId, RenderStyle>,
     renderer: RenderContext,
     source_path: Option<PathBuf>,
+    font_context: FontContext,
+    layout_context: LayoutContext<()>,
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, Ord, PartialEq, PartialOrd)]
@@ -297,12 +335,13 @@ pub fn main() -> Result<()> {
     if !args.skip_download {
         ensure_wpt_checkout(&args.wpt_dir)?;
     }
-    load_ahem_font(&args.ahem_font, &args.wpt_dir)?;
+    let ahem_font = load_ahem_font(&args.ahem_font, &args.wpt_dir)?;
 
     match args.mode {
-        RunMode::AllCss { filter } => run_css_reftests(&args.wpt_dir, filter.as_deref()),
+        RunMode::AllCss { filter } => run_css_reftests(&args.wpt_dir, &ahem_font, filter.as_deref()),
         RunMode::Pair { test, reference } => {
             let artifacts = ArtifactWriter::prepare()?;
+            let reference_renderer = ChromeReferenceRenderer::start(&args.wpt_dir, ahem_font.path())?;
             let html = read_html_document(&test).map_err(|error| error.to_string());
             let relation = html
                 .as_ref()
@@ -314,9 +353,11 @@ pub fn main() -> Result<()> {
                 test: test.clone(),
                 references: vec![ReftestReference { reference: reference.clone(), relation, fuzzy }],
             };
-            let result = run_reftest_and_save(&reftest, &args.wpt_dir, &artifacts, 0)?;
+            let result = run_reftest_and_save(&reftest, &args.wpt_dir, &artifacts, 0, &ahem_font, &reference_renderer)?;
             let report_path = artifacts.write_report(std::slice::from_ref(&result))?;
+            let status_path = artifacts.write_status_manifest(std::slice::from_ref(&result))?;
             println!("\nWPT report written to {}", cli_clickable_link(&report_path));
+            println!("WPT status manifest written to {}", cli_clickable_link(&status_path));
 
             match result.status {
                 TestStatus::Pass => {
@@ -379,26 +420,25 @@ pub fn ensure_wpt_checkout(wpt_dir: &Path) -> Result<()> {
     Ok(())
 }
 
-pub fn load_ahem_font(explicit_path: &Option<PathBuf>, wpt_dir: &Path) -> Result<()> {
-    if let Some(path) = explicit_path {
+pub fn load_ahem_font(explicit_path: &Option<PathBuf>, wpt_dir: &Path) -> Result<AhemFont> {
+    let path = if let Some(path) = explicit_path {
         fs::metadata(path).with_context(|| format!("Ahem font not found at {}", path.display()))?;
-        return Ok(());
-    }
-
-    let candidates = [
-        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("fonts/Ahem.ttf"),
-        wpt_dir.join("fonts/Ahem.ttf"),
-        wpt_dir.join("css/fonts/ahem/Ahem.ttf"),
-    ];
-
-    if candidates.iter().any(|path| path.exists()) {
-        Ok(())
+        path.clone()
     } else {
-        bail!("Ahem.ttf is required but was not found in the WPT checkout. Pass --ahem-font PATH");
-    }
+        let candidates = [
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("fonts/Ahem.ttf"),
+            wpt_dir.join("fonts/Ahem.ttf"),
+            wpt_dir.join("css/fonts/ahem/Ahem.ttf"),
+        ];
+        candidates.into_iter().find(|path| path.exists()).ok_or_else(|| {
+            anyhow!("Ahem.ttf is required but was not found in the WPT checkout. Pass --ahem-font PATH")
+        })?
+    };
+    let data = fs::read(&path).with_context(|| format!("failed to read Ahem font at {}", path.display()))?;
+    Ok(AhemFont { path, data: Arc::new(data) })
 }
 
-pub fn run_css_reftests(wpt_dir: &Path, filter: Option<&str>) -> Result<()> {
+pub fn run_css_reftests(wpt_dir: &Path, ahem_font: &AhemFont, filter: Option<&str>) -> Result<()> {
     let css_dir = wpt_dir.join("css");
     if !css_dir.is_dir() {
         bail!("CSS test directory not found at {}", css_dir.display());
@@ -412,7 +452,8 @@ pub fn run_css_reftests(wpt_dir: &Path, filter: Option<&str>) -> Result<()> {
     }
 
     let artifacts = ArtifactWriter::prepare()?;
-    let results = run_reftests_in_parallel(&tests, wpt_dir, &artifacts)?;
+    let reference_renderer = ChromeReferenceRenderer::start(wpt_dir, ahem_font.path())?;
+    let results = run_reftests_in_parallel(&tests, wpt_dir, &artifacts, ahem_font, &reference_renderer)?;
     let passed = results.iter().filter(|result| result.status == TestStatus::Pass).count();
     let failed = results.iter().filter(|result| result.status == TestStatus::Fail).count();
     let errors = results.iter().filter(|result| result.status == TestStatus::Error).count();
@@ -425,6 +466,7 @@ pub fn run_css_reftests(wpt_dir: &Path, filter: Option<&str>) -> Result<()> {
         .collect::<Vec<_>>();
 
     let report_path = artifacts.write_report(&results)?;
+    let status_path = artifacts.write_status_manifest(&results)?;
     if !problems.is_empty() {
         println!("\nFailed or errored reftests (showing up to 20):");
         for (reftest, reason) in problems.iter().take(20) {
@@ -435,6 +477,7 @@ pub fn run_css_reftests(wpt_dir: &Path, filter: Option<&str>) -> Result<()> {
         }
     }
     println!("\nWPT report written to {}", cli_clickable_link(&report_path));
+    println!("WPT status manifest written to {}", cli_clickable_link(&status_path));
     println!("CSS reftests complete: {passed} passed, {failed} failed, {errors} errors, {skipped} skipped");
 
     if problems.is_empty() { Ok(()) } else { bail!("{} CSS reftests failed or errored", problems.len()) }
@@ -444,6 +487,8 @@ fn run_reftests_in_parallel(
     tests: &[Reftest],
     wpt_dir: &Path,
     artifacts: &ArtifactWriter,
+    ahem_font: &AhemFont,
+    reference_renderer: &ChromeReferenceRenderer,
 ) -> Result<Vec<ReftestReport>> {
     let worker_count = thread::available_parallelism().map(|count| count.get()).unwrap_or(1).min(tests.len());
     println!(
@@ -468,7 +513,8 @@ fn run_reftests_in_parallel(
                     let Some(reftest) = tests.get(index) else {
                         break;
                     };
-                    let result = run_reftest_and_save(reftest, wpt_dir, artifacts, index);
+                    let result =
+                        run_reftest_and_save(reftest, wpt_dir, artifacts, index, ahem_font, reference_renderer);
                     if sender.send((index, result)).is_err() {
                         break;
                     }
@@ -530,6 +576,8 @@ fn run_reftest_and_save(
     wpt_dir: &Path,
     artifacts: &ArtifactWriter,
     index: usize,
+    ahem_font: &AhemFont,
+    reference_renderer: &ChromeReferenceRenderer,
 ) -> Result<ReftestReport> {
     let name = report_path(&reftest.test, wpt_dir);
     let test_path = reftest.test.display().to_string();
@@ -544,7 +592,7 @@ fn run_reftest_and_save(
         });
     }
 
-    let actual = match render_reftest_document(&reftest.test) {
+    let actual = match render_reftest_document(&reftest.test, ahem_font) {
         Ok(actual) => actual,
         Err(error) => {
             return Ok(ReftestReport {
@@ -573,34 +621,23 @@ fn run_reftest_and_save(
                     difference: None,
                     fuzzy: None,
                     reference_image: None,
+                    difference_image: None,
                 });
                 continue;
             }
         };
-        if let Some(reason) = skip::reason_for_reference(&reference.reference) {
-            references.push(ReferenceReport {
-                reference_path,
-                relation: reference.relation,
-                status: TestStatus::Skip,
-                reason,
-                difference: None,
-                fuzzy: Some(fuzzy),
-                reference_image: None,
-            });
-            continue;
-        }
-
-        let reference_buffer = match render_reftest_document(&reference.reference) {
+        let reference_buffer = match reference_renderer.screenshot(&reference.reference) {
             Ok(buffer) => buffer,
             Err(error) => {
                 references.push(ReferenceReport {
                     reference_path,
                     relation: reference.relation,
                     status: TestStatus::Error,
-                    reason: format!("Reference render: {error}"),
+                    reason: format!("Chrome reference screenshot: {error}"),
                     difference: None,
                     fuzzy: Some(fuzzy),
                     reference_image: None,
+                    difference_image: None,
                 });
                 continue;
             }
@@ -609,6 +646,15 @@ fn run_reftest_and_save(
         let reference_image =
             Some(artifacts.save_image(index, &image_kind, &reference_buffer, VIEWPORT_WIDTH, VIEWPORT_HEIGHT)?);
         let difference = PixelDifference::between(&actual, &reference_buffer);
+        let difference_kind = format!("difference-{:03}", reference_index + 1);
+        let difference_image = artifacts.save_difference_image(
+            index,
+            &difference_kind,
+            &actual,
+            &reference_buffer,
+            VIEWPORT_WIDTH,
+            VIEWPORT_HEIGHT,
+        )?;
         let equivalent = fuzzy.allows(difference);
         let status = if reference.relation.is_satisfied_by(equivalent) { TestStatus::Pass } else { TestStatus::Fail };
         let reason = format!(
@@ -626,6 +672,7 @@ fn run_reftest_and_save(
             difference: Some(difference),
             fuzzy: Some(fuzzy),
             reference_image,
+            difference_image,
         });
     }
 
@@ -865,9 +912,10 @@ fn parse_fuzzy_range(value: &str) -> Result<[usize; 2], String> {
 }
 
 pub fn run_reftest_pair(test_path: &Path, reference_path: &Path) -> Result<usize> {
-    let test = render_reftest_document(test_path)?;
-    let reference = render_reftest_document(reference_path)?;
     let wpt_dir = default_wpt_dir();
+    let ahem_font = load_ahem_font(&None, &wpt_dir)?;
+    let test = render_reftest_document(test_path, &ahem_font)?;
+    let reference = ChromeReferenceRenderer::start(&wpt_dir, ahem_font.path())?.screenshot(reference_path)?;
     let html = read_html_document(test_path)?;
     let relation =
         reftest_relation_for_reference(&html, &wpt_dir, test_path, reference_path).unwrap_or(ReferenceRelation::Match);
@@ -890,14 +938,16 @@ pub fn build_node(
                 Ok(None)
             } else {
                 let style = Style::default();
-                let text_for_paint = text.clone();
-                let node = document.tree.new_leaf_with_context(
-                    style,
-                    NodeContext::text(text, inherited.font_size, inherited.writing_mode),
-                )?;
+                let node_context = NodeContext::text(
+                    text,
+                    inherited.font_size,
+                    inherited.writing_mode,
+                    &mut document.font_context,
+                    &mut document.layout_context,
+                );
+                let node = document.tree.new_leaf_with_context(style, node_context)?;
                 let mut render_style = RenderStyle::inherit_from(inherited);
                 render_style.is_inline = true;
-                render_style.text = Some(text_for_paint);
                 document.paint.insert(node, render_style);
                 Ok(Some(node))
             }
@@ -976,6 +1026,7 @@ pub fn build_element(
         }
     }
     render_style.font_size = computed_font_size;
+    apply_user_agent_defaults(element.name(), &mut style, &mut render_style, computed_font_size);
 
     for (_, declaration) in &declarations {
         match declaration.property.as_str() {
@@ -1059,6 +1110,45 @@ pub fn build_element(
     };
     document.paint.insert(node, render_style);
     Ok(Some(node))
+}
+
+fn apply_user_agent_defaults(name: &str, style: &mut Style, render_style: &mut RenderStyle, font_size: f32) {
+    match name {
+        "body" => {
+            let margin = LengthPercentageAuto::length(8.0);
+            style.margin = Rect { left: margin, right: margin, top: margin, bottom: margin };
+        }
+        "p" => {
+            style.margin.top = LengthPercentageAuto::length(font_size);
+            style.margin.bottom = LengthPercentageAuto::length(font_size);
+        }
+        "a" | "abbr" | "b" | "bdi" | "bdo" | "cite" | "code" | "data" | "del" | "dfn" | "em" | "i" | "ins" | "kbd"
+        | "mark" | "q" | "ruby" | "s" | "samp" | "small" | "span" | "strike" | "strong" | "sub" | "sup" | "time"
+        | "u" | "var" => render_style.is_inline = true,
+        _ => {}
+    }
+}
+
+#[cfg(test)]
+mod user_agent_style_tests {
+    use super::*;
+
+    #[test]
+    fn applies_browser_body_paragraph_and_inline_defaults() {
+        let mut body = Style::default();
+        apply_user_agent_defaults("body", &mut body, &mut RenderStyle::default(), 16.0);
+        let eight_px = LengthPercentageAuto::length(8.0);
+        assert_eq!(body.margin, Rect { left: eight_px, right: eight_px, top: eight_px, bottom: eight_px });
+
+        let mut paragraph = Style::default();
+        apply_user_agent_defaults("p", &mut paragraph, &mut RenderStyle::default(), 20.0);
+        assert_eq!(paragraph.margin.top, LengthPercentageAuto::length(20.0));
+        assert_eq!(paragraph.margin.bottom, LengthPercentageAuto::length(20.0));
+
+        let mut strong = RenderStyle::default();
+        apply_user_agent_defaults("strong", &mut Style::default(), &mut strong, 16.0);
+        assert!(strong.is_inline);
+    }
 }
 
 #[derive(Debug)]
