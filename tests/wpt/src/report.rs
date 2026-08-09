@@ -471,10 +471,15 @@ function applyResultFilters() {
     result.hidden = (failedOnly.checked && notFailed) || (skippedOnly.checked && result.dataset.status !== "skip");
   });
   document.querySelectorAll(".tree-node").forEach((node) => {
-    const categoryToggle = node.classList.contains("category-node")
-      ? categoryToggleById.get(node.dataset.category)
-      : null;
-    const categoryHidden = categoryToggle && !categoryToggle.checked && !categoryToggle.indeterminate;
+    let categoryHidden = false;
+    if (node.classList.contains("category-node")) {
+      const categoryToggle = categoryToggleById.get(node.dataset.category);
+      categoryHidden = categoryToggle && !categoryToggle.checked && !categoryToggle.indeterminate;
+    } else if (node.classList.contains("test-node")) {
+      const owningCategory = node.parentElement.closest(".category-node");
+      const categoryToggle = owningCategory && categoryToggleById.get(owningCategory.dataset.category);
+      categoryHidden = categoryToggle && !categoryToggle.checked;
+    }
     const failuresHidden = failedOnly.checked && node.dataset.failures === "0";
     const skipsHidden = skippedOnly.checked && node.dataset.skipped === "0";
     node.hidden = Boolean(categoryHidden || failuresHidden || skipsHidden);
