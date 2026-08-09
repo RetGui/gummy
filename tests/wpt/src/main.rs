@@ -27,10 +27,12 @@ use lightningcss::{
     traits::{IntoOwned, ToCss},
     values::length::LengthPercentage as CssLengthPercentage,
 };
+
 use scraper::{
     ElementRef, Html, Selector,
     node::{Element, Node},
 };
+
 use vello_cpu::peniko::Color;
 use vello_cpu::{Pixmap, RenderContext};
 
@@ -308,7 +310,7 @@ pub fn main() -> Result<()> {
             };
             let result = run_reftest_and_save(&reftest, &args.wpt_dir, &artifacts, 0)?;
             let report_path = artifacts.write_report(std::slice::from_ref(&result))?;
-            println!("WPT report written to {}", report_path.display());
+            println!("\nWPT report written to {}", cli_clickable_link(&report_path));
 
             match result.status {
                 TestStatus::Pass => {
@@ -333,6 +335,12 @@ pub fn main() -> Result<()> {
             }
         }
     }
+}
+
+pub fn cli_clickable_link(path: &PathBuf) -> String {
+    let report_path = path.to_string_lossy().replace('\\', "/");
+
+    format!("\x1b]8;;{}\x1b\\{}\x1b]8;;\x1b\\", report_path, report_path)
 }
 
 pub fn default_wpt_dir() -> PathBuf {
@@ -420,7 +428,7 @@ pub fn run_css_reftests(wpt_dir: &Path, filter: Option<&str>) -> Result<()> {
             println!("  ... and {} more", problems.len() - 20);
         }
     }
-    println!("\nWPT report written to {}", report_path.display());
+    println!("\nWPT report written to {}", cli_clickable_link(&report_path));
     println!("CSS reftests complete: {passed} passed, {failed} failed, {errors} errors, {skipped} skipped");
 
     if problems.is_empty() { Ok(()) } else { bail!("{} CSS reftests failed or errored", problems.len()) }
