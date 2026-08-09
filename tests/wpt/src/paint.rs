@@ -7,7 +7,7 @@ use anyhow::Context;
 use vello_cpu::{Image, ImageSource, Pixmap, RenderContext, Resources, kurbo};
 
 use crate::parse::parse_and_layout_with_path;
-use crate::{Color, Document, NodeContext, WritingMode};
+use crate::{Color, Document, ImageMeasureData, NodeContext, WritingMode};
 use gummy::{AvailableSpace, NodeId, Rect, Size, Style};
 
 pub fn read_html_document(path: &Path) -> anyhow::Result<String> {
@@ -166,20 +166,14 @@ pub fn measure_content(
     context: Option<&mut NodeContext>,
     _style: &Style,
 ) -> Size<f32> {
-    if let Size { width: Some(width), height: Some(height) } = known_dimensions {
-        return Size { width, height };
-    }
-
     let Some(context) = context else {
         return known_dimensions.map(|dimension| dimension.unwrap_or(0.0));
     };
-    if let Some(image) = context.image_size {
-        return match known_dimensions {
-            Size { width: Some(width), height: Some(height) } => Size { width, height },
-            Size { width: Some(width), height: None } => Size { width, height: width * image.height / image.width },
-            Size { width: None, height: Some(height) } => Size { width: height * image.width / image.height, height },
-            Size { width: None, height: None } => image,
-        };
+    if let Some(image) = context.image {
+        return measure_image(image, known_dimensions, available_space);
+    }
+    if let Size { width: Some(width), height: Some(height) } = known_dimensions {
+        return Size { width, height };
     }
     let Some(text) = &context.text else {
         return known_dimensions.map(|dimension| dimension.unwrap_or(0.0));
@@ -205,5 +199,63 @@ pub fn measure_content(
     match context.writing_mode {
         WritingMode::HorizontalTb => Size { width: inline, height: block },
         WritingMode::VerticalRl | WritingMode::VerticalLr => Size { width: block, height: inline },
+    }
+}
+
+fn measure_image(
+    image: ImageMeasureData,
+    known_dimensions: Size<Option<f32>>,
+    available_space: Size<AvailableSpace>,
+) -> Size<f32> {
+    let intrinsic_measurement = known_dimensions == Size::NONE
+        && matches!(available_space.width, AvailableSpace::Definite(0.0))
+        && matches!(available_space.height, AvailableSpace::Definite(0.0));
+    if intrinsic_measurement {
+        return Size::intrinsic(image.size.width, image.size.height, image.aspect_ratio);
+    }
+
+    match known_dimensions {
+        Size { width: Some(width), height: Some(height) } => Size { width, height },
+        Size { width: Some(width), height: None } => {
+            Size { width, height: image.aspect_ratio.map(|ratio| width / ratio).or(image.size.height).unwrap_or(0.0) }
+        }
+        Size { width: None, height: Some(height) } => {
+            Size { width: image.aspect_ratio.map(|ratio| height * ratio).or(image.size.width).unwrap_or(0.0), height }
+        }
+        Size { width: None, height: None } => {
+            let size = image.size.maybe_apply_aspect_ratio(image.aspect_ratio);
+            Size { width: size.width.unwrap_or(0.0), height: size.height.unwrap_or(0.0) }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn image_intrinsic_measurement_encodes_ratio_only_metadata() {
+        let image = ImageMeasureData { size: Size::NONE, aspect_ratio: Some(2.0) };
+        let measured = measure_image(
+            image,
+            Size::NONE,
+            Size { width: AvailableSpace::Definite(0.0), height: AvailableSpace::Definite(0.0) },
+        );
+
+        assert_eq!(measured.decode_intrinsic_derived(), (None, None, Some(2.0)));
+        assert_eq!(measured.width, -2.0);
+        assert!(measured.height.is_nan());
+    }
+
+    #[test]
+    fn ordinary_image_measurement_still_uses_known_axis() {
+        let image = ImageMeasureData { size: Size::NONE, aspect_ratio: Some(2.0) };
+        let measured = measure_image(
+            image,
+            Size { width: None, height: Some(25.0) },
+            Size { width: AvailableSpace::MaxContent, height: AvailableSpace::MaxContent },
+        );
+
+        assert_eq!(measured, Size { width: 50.0, height: 25.0 });
     }
 }

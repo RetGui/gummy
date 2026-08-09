@@ -5,9 +5,12 @@ edition = "2024"
 
 [dependencies]
 anyhow = "1.0"
+data-url = "0.3"
 ego-tree = "0.10"
 gummy = { path = "../..", features = ["parse"] }
 lightningcss = { version = "=1.0.0-alpha.72", default-features = false, features = ["into_owned"] }
 png = "0.18"
 scraper = "0.24"
+svgtypes = "0.16"
+usvg = { version = "0.47", default-features = false }
 vello_cpu = "0.2.0"

@@ -566,6 +566,20 @@ impl Size<f32> {
         self.width > 0.0 && self.height > 0.0
     }
 
+    /// Encode intrinsic size data.
+    #[inline(always)]
+    pub fn intrinsic(width: Option<f32>, height: Option<f32>, aspect_ratio: Option<f32>) -> Size<f32> {
+        match (width, height, aspect_ratio) {
+            (Some(width), Some(height), _) => Size { width, height },
+            (Some(width), None, Some(aspect_ratio)) => Size { width, height: -aspect_ratio },
+            (None, Some(height), Some(aspect_ratio)) => Size { width: -aspect_ratio, height },
+            (Some(width), None, None) => Size { width, height: f32::NAN },
+            (None, Some(height), None) => Size { width: f32::NAN, height },
+            (None, None, Some(aspect_ratio)) => Size { width: -aspect_ratio, height: f32::NAN },
+            (None, None, None) => Size { width: f32::NAN, height: f32::NAN },
+        }
+    }
+
     /// Decode intrinsic size data.
     pub fn decode_intrinsic_derived(&self) -> (Option<f32>, Option<f32>, Option<f32>) {
         let width = if self.width.is_finite() && self.width >= 0.0 { Some(self.width) } else { None };

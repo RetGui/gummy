@@ -3,8 +3,10 @@ pub mod paint;
 pub mod parse;
 pub mod report;
 pub mod skip;
+mod svg;
 
 use anyhow::{Context, Result, anyhow, bail};
+use data_url::DataUrl;
 
 use std::{
     collections::HashMap,
@@ -31,6 +33,7 @@ use scraper::{
     ElementRef, Html, Selector,
     node::{Element, Node},
 };
+use svgtypes::{Length as SvgLength, LengthUnit as SvgLengthUnit, ViewBox as SvgViewBox};
 use vello_cpu::peniko::Color;
 use vello_cpu::{Pixmap, RenderContext};
 
@@ -101,27 +104,32 @@ impl RenderStyle {
 #[derive(Clone, Debug)]
 pub struct NodeContext {
     text: Option<String>,
-    image_size: Option<gummy::Size<f32>>,
+    image: Option<ImageMeasureData>,
     font_size: f32,
     writing_mode: WritingMode,
 }
 
+#[derive(Clone, Copy, Debug)]
+pub struct ImageMeasureData {
+    size: gummy::Size<Option<f32>>,
+    aspect_ratio: Option<f32>,
+}
+
+impl ImageMeasureData {
+    const NONE: Self = Self { size: gummy::Size::NONE, aspect_ratio: None };
+}
+
 impl NodeContext {
     pub fn element() -> Self {
-        Self { text: None, image_size: None, font_size: 16.0, writing_mode: WritingMode::HorizontalTb }
+        Self { text: None, image: None, font_size: 16.0, writing_mode: WritingMode::HorizontalTb }
     }
 
-    pub fn image(width: f32, height: f32) -> Self {
-        Self {
-            text: None,
-            image_size: Some(gummy::Size { width, height }),
-            font_size: 16.0,
-            writing_mode: WritingMode::HorizontalTb,
-        }
+    pub fn image(image: ImageMeasureData) -> Self {
+        Self { text: None, image: Some(image), font_size: 16.0, writing_mode: WritingMode::HorizontalTb }
     }
 
     pub fn text(text: String, font_size: f32, writing_mode: WritingMode) -> Self {
-        Self { text: Some(text), image_size: None, font_size, writing_mode }
+        Self { text: Some(text), image: None, font_size, writing_mode }
     }
 }
 
@@ -931,15 +939,20 @@ pub fn build_element(
         ..Style::default()
     };
 
-    if element.name() == "img"
-        && let Some(src) = element.attr("src")
-    {
-        let image = load_image(document.source_path.as_deref(), src)?;
-        let width = image.width() as f32;
-        let height = image.height() as f32;
-        render_style.image = Some(image);
+    let mut image_measure = None;
+    if element.name() == "img" {
         render_style.is_inline = true;
-        style.aspect_ratio = (height > 0.0).then_some(width / height);
+        style.item_is_replaced = true;
+        style.replaced = true;
+        image_measure = Some(ImageMeasureData::NONE);
+
+        if let Some(src) = element.attr("src") {
+            let image = load_image(document.source_path.as_deref(), src)?;
+            style.aspect_ratio = image.measure.aspect_ratio;
+            image_measure = Some(image.measure);
+            render_style.image = Some(image.pixmap);
+        }
+
         if let Some(width) = element.attr("width").and_then(|value| value.parse::<f32>().ok()) {
             style.size.width = Dimension::length(width.max(0.0));
         }
@@ -994,7 +1007,10 @@ pub fn build_element(
 
     let inline_formatting_context = style.display == Display::Block
         && !children.is_empty()
-        && children.iter().all(|child| document.paint.get(child).is_some_and(|paint| paint.is_inline));
+        && children.iter().all(|child| {
+            document.tree.style(*child).is_ok_and(|style| style.position != gummy::Position::Absolute)
+                && document.paint.get(child).is_some_and(|paint| paint.is_inline)
+        });
     if inline_formatting_context {
         style.display = Display::Flex;
         style.flex_wrap = if render_style.white_space_nowrap { gummy::FlexWrap::NoWrap } else { gummy::FlexWrap::Wrap };
@@ -1030,10 +1046,7 @@ pub fn build_element(
     }
 
     let node = if children.is_empty() {
-        let context = render_style
-            .image
-            .as_ref()
-            .map_or_else(NodeContext::element, |image| NodeContext::image(image.width() as f32, image.height() as f32));
+        let context = image_measure.map_or_else(NodeContext::element, NodeContext::image);
         document.tree.new_leaf_with_context(style, context)?
     } else {
         document.tree.new_with_children(style, &children)?
@@ -1042,7 +1055,28 @@ pub fn build_element(
     Ok(Some(node))
 }
 
-fn load_image(source_path: Option<&Path>, src: &str) -> Result<Arc<Pixmap>> {
+#[derive(Debug)]
+struct LoadedImage {
+    pixmap: Arc<Pixmap>,
+    measure: ImageMeasureData,
+}
+
+fn load_image(source_path: Option<&Path>, src: &str) -> Result<LoadedImage> {
+    let src = src.trim();
+    if src.starts_with("data:") {
+        let data_url = DataUrl::process(src).with_context(|| "failed to parse image data URL")?;
+        let is_svg = data_url.mime_type().matches("image", "svg+xml");
+        if !is_svg && !data_url.mime_type().matches("image", "png") {
+            bail!("unsupported image data URL type {}", data_url.mime_type());
+        }
+        let (bytes, _) = data_url.decode_to_vec().with_context(|| "failed to decode image data URL")?;
+        return if is_svg {
+            load_svg(&bytes, source_path.and_then(Path::parent), "image data URL")
+        } else {
+            load_png(&bytes, "image data URL")
+        };
+    }
+
     let source_path = source_path.ok_or_else(|| anyhow!("cannot resolve image {src:?} without a document path"))?;
     let src = clean_href(src);
     let path = if Path::new(&src).has_root() {
@@ -1055,9 +1089,54 @@ fn load_image(source_path: Option<&Path>, src: &str) -> Result<Arc<Pixmap>> {
         source_path.parent().unwrap_or(source_path).join(src)
     };
     let bytes = fs::read(&path).with_context(|| format!("failed to read image {}", path.display()))?;
-    let pixmap =
-        Pixmap::from_png(Cursor::new(bytes)).with_context(|| format!("failed to decode PNG {}", path.display()))?;
-    Ok(Arc::new(pixmap))
+    let label = path.display().to_string();
+    if path.extension().is_some_and(|extension| extension.eq_ignore_ascii_case("svg")) {
+        load_svg(&bytes, path.parent(), &label)
+    } else {
+        load_png(&bytes, &label)
+    }
+}
+
+fn load_png(bytes: &[u8], label: &str) -> Result<LoadedImage> {
+    let pixmap = Pixmap::from_png(Cursor::new(bytes)).with_context(|| format!("failed to decode PNG {label}"))?;
+    let width = pixmap.width() as f32;
+    let height = pixmap.height() as f32;
+    let measure = ImageMeasureData {
+        size: gummy::Size::new(width, height),
+        aspect_ratio: (height > 0.0).then_some(width / height),
+    };
+    Ok(LoadedImage { pixmap: Arc::new(pixmap), measure })
+}
+
+fn load_svg(bytes: &[u8], resources_dir: Option<&Path>, label: &str) -> Result<LoadedImage> {
+    let source = std::str::from_utf8(bytes).with_context(|| format!("SVG {label} is not UTF-8"))?;
+    let xml = usvg::roxmltree::Document::parse(source).with_context(|| format!("failed to parse SVG XML {label}"))?;
+    let root = xml.root_element();
+    if root.tag_name().name() != "svg" {
+        bail!("image {label} does not have an SVG root element");
+    }
+
+    let options = usvg::Options { resources_dir: resources_dir.map(Path::to_path_buf), ..usvg::Options::default() };
+    let tree = usvg::Tree::from_xmltree(&xml, &options).with_context(|| format!("failed to decode SVG {label}"))?;
+    let rendered_size = tree.size();
+    let width = svg_dimension_is_intrinsic(root.attribute("width")).then_some(rendered_size.width());
+    let height = svg_dimension_is_intrinsic(root.attribute("height")).then_some(rendered_size.height());
+    let aspect_ratio = match (width, height) {
+        (Some(width), Some(height)) if height > 0.0 => Some(width / height),
+        _ => root
+            .attribute("viewBox")
+            .and_then(|value| value.parse::<SvgViewBox>().ok())
+            .map(|view_box| (view_box.w / view_box.h) as f32),
+    };
+    let measure = ImageMeasureData { size: gummy::Size { width, height }, aspect_ratio };
+    let pixmap = svg::rasterize(&tree, VIEWPORT_WIDTH as u16, VIEWPORT_HEIGHT as u16);
+    Ok(LoadedImage { pixmap: Arc::new(pixmap), measure })
+}
+
+fn svg_dimension_is_intrinsic(value: Option<&str>) -> bool {
+    value.and_then(|value| value.parse::<SvgLength>().ok()).is_some_and(|length| {
+        length.unit != SvgLengthUnit::Percent && length.number.is_finite() && length.number >= 0.0
+    })
 }
 
 pub fn matching_declarations(element: &ElementRef<'_>, rules: &[Rule]) -> Vec<(CascadePriority, Declaration)> {
@@ -1223,4 +1302,37 @@ pub fn compare_buffers(buf_a: &[u8], buf_b: &[u8]) -> bool {
 
 pub fn count_differing_pixels(buf_a: &[u8], buf_b: &[u8]) -> usize {
     PixelDifference::between(buf_a, buf_b).total_pixels
+}
+
+#[cfg(test)]
+mod image_tests {
+    use super::*;
+
+    fn measure_svg(source: &str) -> ImageMeasureData {
+        load_svg(source.as_bytes(), None, "inline test SVG").unwrap().measure
+    }
+
+    #[test]
+    fn svg_intrinsic_metadata_uses_resolved_dimensions() {
+        let width_only = measure_svg(r#"<svg xmlns="http://www.w3.org/2000/svg" width="50" viewBox="0 0 100 50"/>"#);
+        assert_eq!(width_only.size, gummy::Size { width: Some(50.0), height: None });
+        assert_eq!(width_only.aspect_ratio, Some(2.0));
+
+        let height_only = measure_svg(r#"<svg xmlns="http://www.w3.org/2000/svg" height="25"/>"#);
+        assert_eq!(height_only.size, gummy::Size { width: None, height: Some(25.0) });
+        assert_eq!(height_only.aspect_ratio, None);
+
+        let ratio_only = measure_svg(r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 50"/>"#);
+        assert_eq!(ratio_only.size, gummy::Size::NONE);
+        assert_eq!(ratio_only.aspect_ratio, Some(2.0));
+
+        let explicit_dimensions =
+            measure_svg(r#"<svg xmlns="http://www.w3.org/2000/svg" width="50" height="25" viewBox="0 0 1 1"/>"#);
+        assert_eq!(explicit_dimensions.size, gummy::Size::new(50.0, 25.0));
+        assert_eq!(explicit_dimensions.aspect_ratio, Some(2.0));
+
+        let no_metadata = measure_svg(r#"<svg xmlns="http://www.w3.org/2000/svg"/>"#);
+        assert_eq!(no_metadata.size, gummy::Size::NONE);
+        assert_eq!(no_metadata.aspect_ratio, None);
+    }
 }
