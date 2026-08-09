@@ -578,6 +578,25 @@ fn apply_typed_property(
             use lightningcss::properties::text::WhiteSpace;
             render_style.white_space_nowrap = matches!(value, WhiteSpace::NoWrap | WhiteSpace::Pre);
         }
+        Property::WordBreak(value) => {
+            use lightningcss::properties::text::WordBreak;
+            render_style.word_break = match value {
+                WordBreak::Normal | WordBreak::BreakWord => parley::style::WordBreakStrength::Normal,
+                WordBreak::KeepAll => parley::style::WordBreakStrength::KeepAll,
+                WordBreak::BreakAll => parley::style::WordBreakStrength::BreakAll,
+            };
+            if *value == WordBreak::BreakWord {
+                render_style.overflow_wrap = parley::style::OverflowWrap::BreakWord;
+            }
+        }
+        Property::OverflowWrap(value) => {
+            use lightningcss::properties::text::OverflowWrap;
+            render_style.overflow_wrap = match value {
+                OverflowWrap::Normal => parley::style::OverflowWrap::Normal,
+                OverflowWrap::Anywhere => parley::style::OverflowWrap::Anywhere,
+                OverflowWrap::BreakWord => parley::style::OverflowWrap::BreakWord,
+            };
+        }
         Property::TextAlign(value) => {
             use lightningcss::properties::text::TextAlign;
             render_style.text_alignment = match value {
@@ -1231,7 +1250,17 @@ pub fn is_css_wide_keyword(value: &str) -> bool {
 }
 
 pub fn is_inherited_property(property: &str) -> bool {
-    matches!(property, "color" | "direction" | "font-size" | "text-align" | "white-space" | "writing-mode")
+    matches!(
+        property,
+        "color"
+            | "direction"
+            | "font-size"
+            | "overflow-wrap"
+            | "text-align"
+            | "white-space"
+            | "word-break"
+            | "writing-mode"
+    )
 }
 
 pub fn apply_inherited_value(
@@ -1247,8 +1276,10 @@ pub fn apply_inherited_value(
             render_style.direction = inherited.direction;
         }
         "font-size" => render_style.font_size = inherited.font_size,
+        "overflow-wrap" => render_style.overflow_wrap = inherited.overflow_wrap,
         "text-align" => render_style.text_alignment = inherited.text_alignment,
         "white-space" => render_style.white_space_nowrap = inherited.white_space_nowrap,
+        "word-break" => render_style.word_break = inherited.word_break,
         "writing-mode" => render_style.writing_mode = inherited.writing_mode,
         _ => {}
     }
@@ -1309,8 +1340,10 @@ pub fn initial_property_value(property: &str) -> Option<&'static str> {
         "background-color" => "transparent",
         "color" => "black",
         "font-size" => "medium",
+        "overflow-wrap" => "normal",
         "text-align" => "start",
         "white-space" => "normal",
+        "word-break" => "normal",
         "writing-mode" => "horizontal-tb",
         "grid-template-rows" | "grid-template-columns" | "grid-template-areas" => "none",
         "grid-auto-rows" | "grid-auto-columns" => "auto",

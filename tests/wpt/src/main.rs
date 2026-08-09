@@ -72,8 +72,10 @@ pub struct RenderStyle {
     is_inline: bool,
     is_table: bool,
     image: Option<Arc<Pixmap>>,
+    overflow_wrap: parley::style::OverflowWrap,
     text_alignment: TextAlignment,
     white_space_nowrap: bool,
+    word_break: parley::style::WordBreakStrength,
     writing_mode: WritingMode,
 }
 
@@ -89,8 +91,10 @@ impl Default for RenderStyle {
             is_inline: false,
             is_table: false,
             image: None,
+            overflow_wrap: parley::style::OverflowWrap::Normal,
             text_alignment: TextAlignment::Start,
             white_space_nowrap: false,
+            word_break: parley::style::WordBreakStrength::Normal,
             writing_mode: WritingMode::HorizontalTb,
         }
     }
@@ -102,8 +106,10 @@ impl RenderStyle {
             color: parent.color,
             direction: parent.direction,
             font_size: parent.font_size,
+            overflow_wrap: parent.overflow_wrap,
             text_alignment: parent.text_alignment,
             white_space_nowrap: parent.white_space_nowrap,
+            word_break: parent.word_break,
             writing_mode: parent.writing_mode,
             ..Self::default()
         }
@@ -203,7 +209,10 @@ impl NodeContext {
     pub(crate) fn text(
         text: String,
         font_size: f32,
+        overflow_wrap: parley::style::OverflowWrap,
         text_alignment: TextAlignment,
+        white_space_nowrap: bool,
+        word_break: parley::style::WordBreakStrength,
         writing_mode: WritingMode,
         font_context: &mut FontContext,
         layout_context: &mut LayoutContext<()>,
@@ -211,6 +220,13 @@ impl NodeContext {
         let mut builder = layout_context.ranged_builder(font_context, &text, 1.0, true);
         builder.push_default(StyleProperty::FontStack(FontStack::Single(FontFamily::Named(Cow::Borrowed("Ahem")))));
         builder.push_default(StyleProperty::FontSize(font_size));
+        builder.push_default(StyleProperty::OverflowWrap(overflow_wrap));
+        builder.push_default(StyleProperty::TextWrapMode(if white_space_nowrap {
+            parley::style::TextWrapMode::NoWrap
+        } else {
+            parley::style::TextWrapMode::Wrap
+        }));
+        builder.push_default(StyleProperty::WordBreak(word_break));
         let layout = builder.build(&text);
         Self { text: Some(AhemTextLayout { layout, text_alignment, writing_mode }), image: None }
     }
@@ -992,7 +1008,10 @@ pub fn build_node(
                 let node_context = NodeContext::text(
                     text,
                     inherited.font_size,
+                    inherited.overflow_wrap,
                     inherited.text_alignment,
+                    inherited.white_space_nowrap,
+                    inherited.word_break,
                     inherited.writing_mode,
                     &mut document.font_context,
                     &mut document.layout_context,
@@ -1133,7 +1152,8 @@ pub fn build_element(
             let mut child_style = document.tree.style(*child)?.clone();
             if inline_formatting_context || render_style.is_table {
                 child_style.flex_grow = 0.0;
-                child_style.flex_shrink = 0.0;
+                child_style.flex_shrink =
+                    if inline_formatting_context && !render_style.white_space_nowrap { 1.0 } else { 0.0 };
                 child_style.flex_basis = Dimension::AUTO;
             }
             let zero_basis = matches!(
