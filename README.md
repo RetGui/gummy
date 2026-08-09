@@ -7,6 +7,13 @@
 
 Gummy is a flexible, high-performance, cross-platform UI layout library written in [Rust](https://www.rust-lang.org).
 
+## Run Tests
+WPT:
+```bash
+cargo run --release --package wpt
+```
+
 ## Credits
 
 Gummy is forked from [Taffy](https://github.com/DioxusLabs/taffy). Taffy was itself forked from [Stretch](https://github.com/vislyhq/stretch). See [LICENSE.md](LICENSE.md) for the retained copyright and license terms.
+

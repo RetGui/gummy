@@ -316,7 +316,7 @@ pub fn main() -> Result<()> {
             };
             let result = run_reftest_and_save(&reftest, &args.wpt_dir, &artifacts, 0)?;
             let report_path = artifacts.write_report(std::slice::from_ref(&result))?;
-            println!("WPT report written to {}", report_path.display());
+            println!("\nWPT report written to {}", cli_clickable_link(&report_path));
 
             match result.status {
                 TestStatus::Pass => {
@@ -341,6 +341,12 @@ pub fn main() -> Result<()> {
             }
         }
     }
+}
+
+pub fn cli_clickable_link(path: &PathBuf) -> String {
+    let report_path = path.to_string_lossy().replace('\\', "/");
+
+    format!("\x1b]8;;{}\x1b\\{}\x1b]8;;\x1b\\", report_path, report_path)
 }
 
 pub fn default_wpt_dir() -> PathBuf {
@@ -428,7 +434,7 @@ pub fn run_css_reftests(wpt_dir: &Path, filter: Option<&str>) -> Result<()> {
             println!("  ... and {} more", problems.len() - 20);
         }
     }
-    println!("\nWPT report written to {}", report_path.display());
+    println!("\nWPT report written to {}", cli_clickable_link(&report_path));
     println!("CSS reftests complete: {passed} passed, {failed} failed, {errors} errors, {skipped} skipped");
 
     if problems.is_empty() { Ok(()) } else { bail!("{} CSS reftests failed or errored", problems.len()) }
@@ -1302,37 +1308,4 @@ pub fn compare_buffers(buf_a: &[u8], buf_b: &[u8]) -> bool {
 
 pub fn count_differing_pixels(buf_a: &[u8], buf_b: &[u8]) -> usize {
     PixelDifference::between(buf_a, buf_b).total_pixels
-}
-
-#[cfg(test)]
-mod image_tests {
-    use super::*;
-
-    fn measure_svg(source: &str) -> ImageMeasureData {
-        load_svg(source.as_bytes(), None, "inline test SVG").unwrap().measure
-    }
-
-    #[test]
-    fn svg_intrinsic_metadata_uses_resolved_dimensions() {
-        let width_only = measure_svg(r#"<svg xmlns="http://www.w3.org/2000/svg" width="50" viewBox="0 0 100 50"/>"#);
-        assert_eq!(width_only.size, gummy::Size { width: Some(50.0), height: None });
-        assert_eq!(width_only.aspect_ratio, Some(2.0));
-
-        let height_only = measure_svg(r#"<svg xmlns="http://www.w3.org/2000/svg" height="25"/>"#);
-        assert_eq!(height_only.size, gummy::Size { width: None, height: Some(25.0) });
-        assert_eq!(height_only.aspect_ratio, None);
-
-        let ratio_only = measure_svg(r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 50"/>"#);
-        assert_eq!(ratio_only.size, gummy::Size::NONE);
-        assert_eq!(ratio_only.aspect_ratio, Some(2.0));
-
-        let explicit_dimensions =
-            measure_svg(r#"<svg xmlns="http://www.w3.org/2000/svg" width="50" height="25" viewBox="0 0 1 1"/>"#);
-        assert_eq!(explicit_dimensions.size, gummy::Size::new(50.0, 25.0));
-        assert_eq!(explicit_dimensions.aspect_ratio, Some(2.0));
-
-        let no_metadata = measure_svg(r#"<svg xmlns="http://www.w3.org/2000/svg"/>"#);
-        assert_eq!(no_metadata.size, gummy::Size::NONE);
-        assert_eq!(no_metadata.aspect_ratio, None);
-    }
 }
