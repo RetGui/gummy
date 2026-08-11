@@ -43,6 +43,7 @@ pub fn parse_and_layout_with_path(
     html: &str,
     source_path: Option<&Path>,
     ahem_font: &AhemFont,
+    browser_font: bool,
 ) -> anyhow::Result<Document> {
     let document = Html::parse_document(html);
     let rules = parse_document_rules_with_path(&document, source_path)?;
@@ -75,7 +76,7 @@ pub fn parse_and_layout_with_path(
     render_document.root = root;
     render_document.paint.insert(root, RenderStyle { background: Some(Color::WHITE), ..RenderStyle::default() });
 
-    let inherited = RenderStyle::default();
+    let inherited = RenderStyle { font_family: browser_font.then(|| "serif".to_owned()), ..RenderStyle::default() };
     if let Some(html_node) = build_node(*root_element, &rules, &inherited, &mut render_document)? {
         render_document.tree.add_child(root, html_node)?;
     }
@@ -564,6 +565,14 @@ fn apply_typed_property(
         Property::FontSize(value) => {
             if let Some(value) = css_font_size(value, font_size) {
                 render_style.font_size = value;
+            }
+        }
+        Property::FontFamily(_) => {
+            if render_style.font_family.is_some()
+                && let Ok(value) =
+                    property.value_to_css_string(PrinterOptions { minify: true, ..PrinterOptions::default() })
+            {
+                render_style.font_family = Some(value);
             }
         }
         Property::Direction(lightningcss::properties::text::Direction::Ltr) => {
@@ -1254,6 +1263,7 @@ pub fn is_inherited_property(property: &str) -> bool {
         property,
         "color"
             | "direction"
+            | "font-family"
             | "font-size"
             | "overflow-wrap"
             | "text-align"
@@ -1276,6 +1286,7 @@ pub fn apply_inherited_value(
             render_style.direction = inherited.direction;
         }
         "font-size" => render_style.font_size = inherited.font_size,
+        "font-family" => render_style.font_family = inherited.font_family.clone(),
         "overflow-wrap" => render_style.overflow_wrap = inherited.overflow_wrap,
         "text-align" => render_style.text_alignment = inherited.text_alignment,
         "white-space" => render_style.white_space_nowrap = inherited.white_space_nowrap,
@@ -1339,6 +1350,7 @@ pub fn initial_property_value(property: &str) -> Option<&'static str> {
         | "border-inline-end-style" => "none",
         "background-color" => "transparent",
         "color" => "black",
+        "font-family" => "serif",
         "font-size" => "medium",
         "overflow-wrap" => "normal",
         "text-align" => "start",

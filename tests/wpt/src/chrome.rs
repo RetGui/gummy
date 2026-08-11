@@ -22,6 +22,23 @@ use crate::{VIEWPORT_HEIGHT, VIEWPORT_WIDTH};
 
 const REFERENCE_READY_TIMEOUT_MS: usize = 10_000;
 const AHEM_FONT_ROUTE: &str = "__gummy__/Ahem.ttf";
+const FONT_STYLE_OVERRIDE_SCRIPT: &str = r#"
+    const namespace = document.documentElement.namespaceURI;
+    const style = namespace === 'http://www.w3.org/1999/xhtml'
+        ? document.createElement('style')
+        : document.createElementNS(namespace, 'style');
+    style.textContent = `
+        @layer gummy-font-style-override {
+            *, *::before, *::after {
+                font-style: normal !important;
+                font-weight: 400 !important;
+                font-synthesis: none !important;
+            }
+        }
+    `;
+    const parent = document.head || document.documentElement;
+    parent.insertBefore(style, parent.firstChild);
+"#;
 const AHEM_OVERRIDE_SCRIPT: &str = r#"
     const namespace = document.documentElement.namespaceURI;
     const style = namespace === 'http://www.w3.org/1999/xhtml'
@@ -35,9 +52,6 @@ const AHEM_OVERRIDE_SCRIPT: &str = r#"
         @layer gummy-ahem-override {
             *, *::before, *::after {
                 font-family: "Gummy Ahem" !important;
-                font-style: normal !important;
-                font-weight: 400 !important;
-                font-synthesis: none !important;
             }
         }
     `;
@@ -48,10 +62,11 @@ const AHEM_OVERRIDE_SCRIPT: &str = r#"
 pub struct ChromeReferenceRenderer {
     state: Mutex<ChromeSession>,
     _server: WptHttpServer,
+    browser_font: bool,
 }
 
 impl ChromeReferenceRenderer {
-    pub fn start(wpt_dir: &Path, ahem_font: &Path) -> Result<Self> {
+    pub fn start(wpt_dir: &Path, ahem_font: &Path, browser_font: bool) -> Result<Self> {
         let server = WptHttpServer::start(wpt_dir, ahem_font)?;
         let runtime = Builder::new_current_thread().enable_all().build().context("failed to create Tokio runtime")?;
         let client = runtime.block_on(connect_to_chrome()).context("failed to start a managed ChromeDriver session")?;
@@ -60,7 +75,11 @@ impl ChromeReferenceRenderer {
             return Err(error).context("failed to configure Chrome's reference-test viewport");
         }
 
-        Ok(Self { state: Mutex::new(ChromeSession { client: Some(client), runtime }), _server: server })
+        Ok(Self { state: Mutex::new(ChromeSession { client: Some(client), runtime }), _server: server, browser_font })
+    }
+
+    pub fn browser_font(&self) -> bool {
+        self.browser_font
     }
 
     pub fn screenshot(&self, path: &Path) -> Result<Vec<u8>> {
@@ -69,7 +88,7 @@ impl ChromeReferenceRenderer {
         let client = state.client.as_ref().ok_or_else(|| anyhow!("Chrome reference session is closed"))?;
         let png = state
             .runtime
-            .block_on(capture_reference(client, url.as_str()))
+            .block_on(capture_reference(client, url.as_str(), self.browser_font))
             .with_context(|| format!("failed to capture Chrome screenshot of {}", path.display()))?;
         screenshot_rgba(&png, path)
     }
@@ -161,9 +180,12 @@ async fn viewport_metrics(client: &WebDriver) -> Result<ViewportMetrics> {
     Ok(ViewportMetrics { width, height, device_pixel_ratio })
 }
 
-async fn capture_reference(client: &WebDriver, url: &str) -> Result<Vec<u8>> {
+async fn capture_reference(client: &WebDriver, url: &str, browser_font: bool) -> Result<Vec<u8>> {
     client.goto(url).await?;
-    client.execute(AHEM_OVERRIDE_SCRIPT, Vec::new()).await?;
+    client.execute(FONT_STYLE_OVERRIDE_SCRIPT, Vec::new()).await?;
+    if !browser_font {
+        client.execute(AHEM_OVERRIDE_SCRIPT, Vec::new()).await?;
+    }
     let readiness_script = r#"
                 const done = arguments[arguments.length - 1];
                 const root = document.documentElement;
@@ -185,12 +207,15 @@ async fn capture_reference(client: &WebDriver, url: &str) -> Result<Vec<u8>> {
                     }, REFERENCE_READY_TIMEOUT_MS);
                 });
                 waitForReftest
-                    .then(() => document.fonts ? document.fonts.load('16px "Gummy Ahem"') : undefined)
+                    .then(() => LOAD_AHEM && document.fonts
+                        ? document.fonts.load('16px "Gummy Ahem"')
+                        : undefined)
                     .then(() => document.fonts ? document.fonts.ready : undefined)
                     .then(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))))
                     .then(() => done(null), error => done(String(error)));
             "#
-    .replace("REFERENCE_READY_TIMEOUT_MS", &REFERENCE_READY_TIMEOUT_MS.to_string());
+    .replace("REFERENCE_READY_TIMEOUT_MS", &REFERENCE_READY_TIMEOUT_MS.to_string())
+    .replace("LOAD_AHEM", if browser_font { "false" } else { "true" });
     let ready: Option<String> = client.execute_async(&readiness_script, Vec::new()).await?.convert()?;
     if let Some(error) = ready {
         bail!("Chrome reference did not become ready: {error}");

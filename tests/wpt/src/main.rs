@@ -68,6 +68,7 @@ pub struct RenderStyle {
     border_visible: Rect<bool>,
     color: Color,
     direction: gummy::Direction,
+    font_family: Option<String>,
     font_size: f32,
     is_inline: bool,
     is_table: bool,
@@ -87,6 +88,7 @@ impl Default for RenderStyle {
             border_visible: Rect { left: false, right: false, top: false, bottom: false },
             color: Color::BLACK,
             direction: gummy::Direction::Ltr,
+            font_family: None,
             font_size: 16.0,
             is_inline: false,
             is_table: false,
@@ -105,6 +107,7 @@ impl RenderStyle {
         Self {
             color: parent.color,
             direction: parent.direction,
+            font_family: parent.font_family.clone(),
             font_size: parent.font_size,
             overflow_wrap: parent.overflow_wrap,
             text_alignment: parent.text_alignment,
@@ -208,6 +211,7 @@ impl NodeContext {
 
     pub(crate) fn text(
         text: String,
+        font_family: Option<&str>,
         font_size: f32,
         overflow_wrap: parley::style::OverflowWrap,
         text_alignment: TextAlignment,
@@ -218,7 +222,10 @@ impl NodeContext {
         layout_context: &mut LayoutContext<()>,
     ) -> Self {
         let mut builder = layout_context.ranged_builder(font_context, &text, 1.0, true);
-        builder.push_default(StyleProperty::FontStack(FontStack::Single(FontFamily::Named(Cow::Borrowed("Ahem")))));
+        builder.push_default(StyleProperty::FontStack(match font_family {
+            Some(font_family) => FontStack::Source(Cow::Borrowed(font_family)),
+            None => FontStack::Single(FontFamily::Named(Cow::Borrowed("Ahem"))),
+        }));
         builder.push_default(StyleProperty::FontSize(font_size));
         builder.push_default(StyleProperty::OverflowWrap(overflow_wrap));
         builder.push_default(StyleProperty::TextWrapMode(if white_space_nowrap {
@@ -401,10 +408,11 @@ pub fn main() -> Result<()> {
     let ahem_font = load_ahem_font(&args.ahem_font, &args.wpt_dir)?;
 
     match args.mode {
-        RunMode::AllCss { filter } => run_css_reftests(&args.wpt_dir, &ahem_font, filter.as_deref()),
+        RunMode::AllCss { filter } => run_css_reftests(&args.wpt_dir, &ahem_font, args.browser_font, filter.as_deref()),
         RunMode::Pair { test, reference } => {
             let artifacts = ArtifactWriter::prepare()?;
-            let reference_renderer = ChromeReferenceRenderer::start(&args.wpt_dir, ahem_font.path())?;
+            let reference_renderer =
+                ChromeReferenceRenderer::start(&args.wpt_dir, ahem_font.path(), args.browser_font)?;
             let html = read_html_document(&test).map_err(|error| error.to_string());
             let relation = html
                 .as_ref()
@@ -501,7 +509,7 @@ pub fn load_ahem_font(explicit_path: &Option<PathBuf>, wpt_dir: &Path) -> Result
     Ok(AhemFont { path, data: Arc::new(data) })
 }
 
-pub fn run_css_reftests(wpt_dir: &Path, ahem_font: &AhemFont, filter: Option<&str>) -> Result<()> {
+pub fn run_css_reftests(wpt_dir: &Path, ahem_font: &AhemFont, browser_font: bool, filter: Option<&str>) -> Result<()> {
     let css_dir = wpt_dir.join("css");
     if !css_dir.is_dir() {
         bail!("CSS test directory not found at {}", css_dir.display());
@@ -515,7 +523,7 @@ pub fn run_css_reftests(wpt_dir: &Path, ahem_font: &AhemFont, filter: Option<&st
     }
 
     let artifacts = ArtifactWriter::prepare()?;
-    let reference_renderer = ChromeReferenceRenderer::start(wpt_dir, ahem_font.path())?;
+    let reference_renderer = ChromeReferenceRenderer::start(wpt_dir, ahem_font.path(), browser_font)?;
     let results = run_reftests_in_parallel(&tests, wpt_dir, &artifacts, ahem_font, &reference_renderer)?;
     let passed = results.iter().filter(|result| result.status == TestStatus::Pass).count();
     let failed = results.iter().filter(|result| result.status == TestStatus::Fail).count();
@@ -658,7 +666,7 @@ fn run_reftest_and_save(
         });
     }
 
-    let actual = match render_reftest_document(&reftest.test, ahem_font) {
+    let actual = match render_reftest_document(&reftest.test, ahem_font, reference_renderer.browser_font()) {
         Ok(actual) => actual,
         Err(error) => {
             return Ok(ReftestReport {
@@ -981,8 +989,8 @@ fn parse_fuzzy_range(value: &str) -> Result<[usize; 2], String> {
 pub fn run_reftest_pair(test_path: &Path, reference_path: &Path) -> Result<usize> {
     let wpt_dir = default_wpt_dir();
     let ahem_font = load_ahem_font(&None, &wpt_dir)?;
-    let test = render_reftest_document(test_path, &ahem_font)?;
-    let reference = ChromeReferenceRenderer::start(&wpt_dir, ahem_font.path())?.screenshot(reference_path)?;
+    let test = render_reftest_document(test_path, &ahem_font, false)?;
+    let reference = ChromeReferenceRenderer::start(&wpt_dir, ahem_font.path(), false)?.screenshot(reference_path)?;
     let html = read_html_document(test_path)?;
     let relation =
         reftest_relation_for_reference(&html, &wpt_dir, test_path, reference_path).unwrap_or(ReferenceRelation::Match);
@@ -1010,6 +1018,7 @@ pub fn build_node(
 fn build_text_leaf(text: String, inherited: &RenderStyle, document: &mut Document) -> Result<NodeId> {
     let node_context = NodeContext::text(
         text,
+        inherited.font_family.as_deref(),
         inherited.font_size,
         inherited.overflow_wrap,
         inherited.text_alignment,

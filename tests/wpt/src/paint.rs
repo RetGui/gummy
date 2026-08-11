@@ -82,9 +82,9 @@ pub fn rasterize_tree(
     Ok(())
 }
 
-pub fn render_reftest_document(path: &Path, ahem_font: &AhemFont) -> anyhow::Result<Vec<u8>> {
+pub fn render_reftest_document(path: &Path, ahem_font: &AhemFont, browser_font: bool) -> anyhow::Result<Vec<u8>> {
     let html = read_html_document(path)?;
-    let mut document = parse_and_layout_with_path(&html, Some(path), ahem_font)?;
+    let mut document = parse_and_layout_with_path(&html, Some(path), ahem_font, browser_font)?;
     let mut resources = Resources::new();
     let root = document.root;
     rasterize_tree(&mut document, &mut resources, root, 0.0, 0.0)?;

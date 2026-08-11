@@ -8,6 +8,7 @@ use std::path::PathBuf;
 pub struct Args {
     pub mode: RunMode,
     pub ahem_font: Option<PathBuf>,
+    pub browser_font: bool,
     pub wpt_dir: PathBuf,
     pub skip_download: bool,
 }
@@ -20,12 +21,17 @@ pub enum RunMode {
 
 impl Args {
     pub fn parse() -> anyhow::Result<Self> {
+        Self::parse_from(env::args().skip(1))
+    }
+
+    fn parse_from(args: impl IntoIterator<Item = String>) -> anyhow::Result<Self> {
         let mut positional = Vec::new();
         let mut ahem_font = None;
+        let mut browser_font = false;
         let mut wpt_dir = default_wpt_dir();
         let mut skip_download = false;
         let mut filter = None;
-        let mut args = env::args().skip(1);
+        let mut args = args.into_iter();
 
         while let Some(arg) = args.next() {
             match arg.as_str() {
@@ -36,6 +42,7 @@ impl Args {
                 "--ahem-font" => {
                     ahem_font = Some(args.next().ok_or_else(|| anyhow!("--ahem-font requires a path"))?.into());
                 }
+                "--browser-font" => browser_font = true,
                 "--wpt-dir" => {
                     wpt_dir = args.next().ok_or_else(|| anyhow!("--wpt-dir requires a path"))?.into();
                 }
@@ -54,7 +61,7 @@ impl Args {
             _ => bail!("Usage: wpt [OPTIONS] [TEST.html REF.html]"),
         };
 
-        Ok(Self { mode, ahem_font, wpt_dir, skip_download })
+        Ok(Self { mode, ahem_font, browser_font, wpt_dir, skip_download })
     }
 }
 
@@ -68,6 +75,7 @@ fn print_usage() {
            --wpt-dir PATH       WPT checkout path (default: tests/wpt/{DEFAULT_WPT_DIR_NAME})\n\
            --skip-download      Do not auto-clone WPT when missing\n\
            --filter TEXT        Only run CSS reftests whose path contains TEXT\n\
+           --browser-font       Honor CSS font-family and let the browser resolve fonts\n\
            --ahem-font PATH     Override Ahem.ttf path"
     );
 }

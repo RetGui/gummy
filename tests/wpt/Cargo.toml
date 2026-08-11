@@ -9,7 +9,7 @@ data-url = "0.3"
 ego-tree = "0.10"
 gummy = { path = "../..", features = ["parse"] }
 lightningcss = { version = "=1.0.0-alpha.72", default-features = false, features = ["into_owned"] }
-parley = { version = "0.7", default-features = false, features = ["std"] }
+parley = { version = "0.7", default-features = false, features = ["std", "system"] }
 png = "0.18"
 scraper = "0.24"
 svgtypes = "0.16"
