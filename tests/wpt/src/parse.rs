@@ -699,6 +699,9 @@ fn apply_typed_property(
         Property::FlexWrap(value, _) => style.flex_wrap = css_flex_wrap(value),
         Property::FlexGrow(value, _) => style.flex_grow = *value,
         Property::FlexShrink(value, _) => style.flex_shrink = *value,
+        Property::Order(value, _) => style.order = *value,
+        // Old flexbox flex order?
+        Property::FlexOrder(value, _) => style.order = *value,
         Property::FlexBasis(value, _) => {
             set_if_some(css_length_percentage_auto(value, font_size).map(Into::into), |value| style.flex_basis = value)
         }
@@ -1033,6 +1036,7 @@ fn apply_unparsed_declaration(
         "flex-grow" => set_if_parse(value, |parsed| style.flex_grow = parsed),
         "flex-shrink" => set_if_parse(value, |parsed| style.flex_shrink = parsed),
         "flex-basis" => set_if_parse(value, |parsed| style.flex_basis = parsed),
+        "order"      => set_if_parse(value, |parsed| style.order = parsed),
         "align-items" => set_if_parse(value, |parsed| style.align_items = Some(parsed)),
         "align-self" => set_if_parse(value, |parsed| style.align_self = Some(parsed)),
         "align-content" => set_if_parse(value, |parsed| style.align_content = Some(parsed)),
@@ -1311,7 +1315,7 @@ pub fn initial_property_value(property: &str) -> Option<&'static str> {
         | "inset-inline-end" => "auto",
         "flex-direction" => "row",
         "flex-wrap" => "nowrap",
-        "flex-grow" => "0",
+        "flex-grow" | "order" => "0",
         "flex-shrink" => "1",
         "overflow-x" | "overflow-y" => "visible",
         "margin-left"

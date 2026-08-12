@@ -552,6 +552,11 @@ pub struct Style<S: CheapCloneStr = DefaultCheapStr> {
     #[cfg(feature = "flexbox")]
     pub flex_shrink: f32,
 
+    #[cfg(any(feature = "flexbox", feature = "grid"))]
+    /// The visual order of the box relative to its siblings.
+    /// Does not affect accessibility/element tree order.
+    pub order: i32,
+
     // Grid container properies
     /// Defines the track sizing functions (heights) of the grid rows
     #[cfg(feature = "grid")]
@@ -644,6 +649,8 @@ impl<S: CheapCloneStr> Style<S> {
         flex_shrink: 1.0,
         #[cfg(feature = "flexbox")]
         flex_basis: Dimension::AUTO,
+        #[cfg(any(feature = "flexbox", feature = "grid"))]
+        order: 0,
         // Grid
         #[cfg(feature = "grid")]
         grid_template_rows: GridTrackVec::new(),
@@ -965,6 +972,10 @@ impl<S: CheapCloneStr> FlexboxItemStyle for Style<S> {
     fn align_self(&self) -> Option<AlignSelf> {
         self.align_self
     }
+    #[inline(always)]
+    fn order(&self) -> i32 {
+        self.order
+    }
 }
 
 #[cfg(feature = "flexbox")]
@@ -985,6 +996,8 @@ impl<T: FlexboxItemStyle> FlexboxItemStyle for &'_ T {
     fn align_self(&self) -> Option<AlignSelf> {
         (*self).align_self()
     }
+    #[inline(always)]
+    fn order(&self) -> i32 { (*self).order() }
 }
 
 #[cfg(feature = "grid")]
@@ -1247,6 +1260,8 @@ mod tests {
             justify_self: Default::default(),
             #[cfg(any(feature = "flexbox", feature = "grid", feature = "block_layout"))]
             align_content: Default::default(),
+            #[cfg(any(feature = "flexbox", feature = "grid"))]
+            order: 0,
             #[cfg(any(feature = "flexbox", feature = "grid"))]
             justify_content: Default::default(),
             inset: Rect::auto(),

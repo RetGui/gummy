@@ -58,6 +58,12 @@ pub trait FlexboxItemStyle: CoreStyle {
         Style::<Self::CustomIdent>::DEFAULT.flex_shrink
     }
 
+    /// Determines this flex item's position relative to its siblings.
+    #[inline(always)]
+    fn order(&self) -> i32 {
+        Style::<Self::CustomIdent>::DEFAULT.order
+    }
+
     /// How this node should be aligned in the cross/block axis
     /// Falls back to the parents [`AlignItems`] if not set
     #[inline(always)]

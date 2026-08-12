@@ -24,7 +24,8 @@ struct FlexItem {
     /// The identifier for the associated node
     node: NodeId,
 
-    /// The order of the node relative to it's siblings
+    /// The order of the node relative to its siblings.
+    /// Note: This is the resolved order, flex_order below is the requested visual order.
     order: u32,
 
     /// The base size of this item
@@ -46,6 +47,8 @@ struct FlexItem {
     flex_shrink: f32,
     /// The flex grow style of the item
     flex_grow: f32,
+    /// The `order` style, which determines this flex item's position relative to its siblings.
+    flex_order: i32,
 
     /// The minimum size of the item. This differs from min_size above because it also
     /// takes into account content based automatic minimum sizes
@@ -254,7 +257,26 @@ fn compute_preliminary(tree: &mut impl LayoutFlexboxContainer, node: NodeId, inp
 
     // 1. Generate anonymous flex items as described in §4 Flex Items.
     debug_log!("generate_anonymous_flex_items");
-    let mut flex_items = generate_anonymous_flex_items(tree, node, &constants);
+    let mut does_order_change = false;
+    let mut flex_items = generate_anonymous_flex_items(tree, node, &constants, &mut does_order_change);
+
+    // The old spec linked below, does this right after generating the anonymous flex items.
+    // https://www.w3.org/TR/2016/CR-css-flexbox-1-20160301/#box-manip
+    if does_order_change {
+        // 5.4. Reordering and Accessibility: the order property
+        // https://www.w3.org/TR/css-flexbox-1/#order-property
+        // The order property can be used to change flex items’ ordering,
+        // laying them out in order-modified document order instead, in order to make their spatial
+        // arrangement on the 2D visual canvas differ from their logical order in linear presentations
+        // such as speech and sequential navigation.
+
+        // Note: This has to be a stable sort because if two children have the same value, they must remain
+        // in their original/element order.
+        flex_items.sort_by(|left, right| left.flex_order.cmp(&right.flex_order));
+        for (index, flex_item) in flex_items.iter_mut().enumerate() {
+            flex_item.order = index as u32;
+        }
+    }
 
     // 9.2. Line Length Determination
 
@@ -519,82 +541,96 @@ fn generate_anonymous_flex_items(
     tree: &impl LayoutFlexboxContainer,
     node: NodeId,
     constants: &AlgoConstants,
+    does_order_change: &mut bool
 ) -> Vec<FlexItem> {
-    tree.child_ids(node)
-        .enumerate()
-        .map(|(index, child)| (index, child, tree.get_flexbox_child_style(child)))
-        .filter(|(_, _, style)| style.position() != Position::Absolute)
-        .filter(|(_, _, style)| style.box_generation_mode() != BoxGenerationMode::None)
-        .map(|(index, child, child_style)| {
-            let aspect_ratio = child_style.aspect_ratio();
-            let padding = child_style
+    let mut flex_items: Vec<FlexItem> = Vec::with_capacity(tree.child_count(node));
+
+    for (index, child_id) in tree.child_ids(node).enumerate() {
+        let flex_item_style = tree.get_flexbox_child_style(child_id);
+        if flex_item_style.position() == Position::Absolute || flex_item_style.box_generation_mode() == BoxGenerationMode::None {
+            continue;
+        }
+
+        let aspect_ratio = flex_item_style.aspect_ratio();
+        let padding = flex_item_style
+            .padding()
+            .resolve_or_zero(constants.node_inner_size.width, |val, basis| tree.calc(val, basis));
+        let border = flex_item_style
+            .border()
+            .resolve_or_zero(constants.node_inner_size.width, |val, basis| tree.calc(val, basis));
+        let pb_sum = (padding + border).sum_axes();
+        let box_sizing_adjustment =
+            if flex_item_style.box_sizing() == BoxSizing::ContentBox { pb_sum } else { Size::ZERO };
+
+        let flex_order = flex_item_style.order();
+
+        if flex_order != 0 {
+            *does_order_change = true;
+        }
+
+        let flex_item = FlexItem {
+            node: child_id,
+            order: index as u32,
+            flex_order,
+            size: flex_item_style
+                .size()
+                .maybe_resolve(constants.node_inner_size, |val, basis| tree.calc(val, basis))
+                .maybe_apply_aspect_ratio(aspect_ratio)
+                .maybe_add(box_sizing_adjustment),
+            min_size: flex_item_style
+                .min_size()
+                .maybe_resolve(constants.node_inner_size, |val, basis| tree.calc(val, basis))
+                .maybe_add(box_sizing_adjustment),
+            max_size: flex_item_style
+                .max_size()
+                .maybe_resolve(constants.node_inner_size, |val, basis| tree.calc(val, basis))
+                .maybe_add(box_sizing_adjustment),
+            aspect_ratio,
+
+            inset: flex_item_style
+                .inset()
+                .zip_size(constants.node_inner_size, |p, s| p.maybe_resolve(s, |val, basis| tree.calc(val, basis))),
+            margin: flex_item_style
+                .margin()
+                .resolve_or_zero(constants.node_inner_size.width, |val, basis| tree.calc(val, basis)),
+            margin_is_auto: flex_item_style.margin().map(LengthPercentageAuto::is_auto),
+            padding: flex_item_style
                 .padding()
-                .resolve_or_zero(constants.node_inner_size.width, |val, basis| tree.calc(val, basis));
-            let border = child_style
+                .resolve_or_zero(constants.node_inner_size.width, |val, basis| tree.calc(val, basis)),
+            border: flex_item_style
                 .border()
-                .resolve_or_zero(constants.node_inner_size.width, |val, basis| tree.calc(val, basis));
-            let pb_sum = (padding + border).sum_axes();
-            let box_sizing_adjustment =
-                if child_style.box_sizing() == BoxSizing::ContentBox { pb_sum } else { Size::ZERO };
-            FlexItem {
-                node: child,
-                order: index as u32,
-                size: child_style
-                    .size()
-                    .maybe_resolve(constants.node_inner_size, |val, basis| tree.calc(val, basis))
-                    .maybe_apply_aspect_ratio(aspect_ratio)
-                    .maybe_add(box_sizing_adjustment),
-                min_size: child_style
-                    .min_size()
-                    .maybe_resolve(constants.node_inner_size, |val, basis| tree.calc(val, basis))
-                    .maybe_add(box_sizing_adjustment),
-                max_size: child_style
-                    .max_size()
-                    .maybe_resolve(constants.node_inner_size, |val, basis| tree.calc(val, basis))
-                    .maybe_add(box_sizing_adjustment),
-                aspect_ratio,
+                .resolve_or_zero(constants.node_inner_size.width, |val, basis| tree.calc(val, basis)),
+            align_self: flex_item_style.align_self().unwrap_or(constants.align_items).resolve_self_relative(
+                flex_item_style.direction(),
+                constants.layout_direction,
+                constants.is_column,
+            ),
+            overflow: flex_item_style.overflow(),
+            scrollbar_width: flex_item_style.scrollbar_width(),
+            flex_grow: flex_item_style.flex_grow(),
+            flex_shrink: flex_item_style.flex_shrink(),
+            flex_basis: 0.0,
+            inner_flex_basis: 0.0,
+            violation: 0.0,
+            frozen: false,
 
-                inset: child_style
-                    .inset()
-                    .zip_size(constants.node_inner_size, |p, s| p.maybe_resolve(s, |val, basis| tree.calc(val, basis))),
-                margin: child_style
-                    .margin()
-                    .resolve_or_zero(constants.node_inner_size.width, |val, basis| tree.calc(val, basis)),
-                margin_is_auto: child_style.margin().map(LengthPercentageAuto::is_auto),
-                padding: child_style
-                    .padding()
-                    .resolve_or_zero(constants.node_inner_size.width, |val, basis| tree.calc(val, basis)),
-                border: child_style
-                    .border()
-                    .resolve_or_zero(constants.node_inner_size.width, |val, basis| tree.calc(val, basis)),
-                align_self: child_style.align_self().unwrap_or(constants.align_items).resolve_self_relative(
-                    child_style.direction(),
-                    constants.layout_direction,
-                    constants.is_column,
-                ),
-                overflow: child_style.overflow(),
-                scrollbar_width: child_style.scrollbar_width(),
-                flex_grow: child_style.flex_grow(),
-                flex_shrink: child_style.flex_shrink(),
-                flex_basis: 0.0,
-                inner_flex_basis: 0.0,
-                violation: 0.0,
-                frozen: false,
+            resolved_minimum_main_size: 0.0,
+            hypothetical_inner_size: Size::zero(),
+            hypothetical_outer_size: Size::zero(),
+            target_size: Size::zero(),
+            outer_target_size: Size::zero(),
+            content_flex_fraction: 0.0,
 
-                resolved_minimum_main_size: 0.0,
-                hypothetical_inner_size: Size::zero(),
-                hypothetical_outer_size: Size::zero(),
-                target_size: Size::zero(),
-                outer_target_size: Size::zero(),
-                content_flex_fraction: 0.0,
+            baseline: 0.0,
 
-                baseline: 0.0,
+            offset_main: 0.0,
+            offset_cross: 0.0,
+        };
 
-                offset_main: 0.0,
-                offset_cross: 0.0,
-            }
-        })
-        .collect()
+        flex_items.push(flex_item);
+    }
+
+    flex_items
 }
 
 /// Determine the available main and cross space for the flex items.
