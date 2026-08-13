@@ -6,7 +6,7 @@ pub mod report;
 pub mod skip;
 mod svg;
 
-use anyhow::{Context, Result, anyhow, bail};
+use anyhow::{Context, Result, anyhow, bail, ensure};
 use data_url::DataUrl;
 
 use std::{
@@ -17,7 +17,7 @@ use std::{
     path::{Path, PathBuf},
     process::Command,
     sync::{
-        Arc,
+        Arc, OnceLock,
         atomic::{AtomicUsize, Ordering},
         mpsc,
     },
@@ -178,6 +178,7 @@ impl TextAlignment {
 pub struct AhemFont {
     path: PathBuf,
     data: Arc<Vec<u8>>,
+    forced_data: Arc<OnceLock<Result<Arc<Vec<u8>>, String>>>,
 }
 
 impl AhemFont {
@@ -185,8 +186,21 @@ impl AhemFont {
         &self.path
     }
 
-    pub fn blob(&self) -> Blob<u8> {
-        Blob::new(self.data.clone())
+    pub fn blob(&self, browser_font: bool) -> Result<Blob<u8>> {
+        Ok(Blob::new(if browser_font { self.data.clone() } else { self.forced_data()? }))
+    }
+
+    pub(crate) fn forced_data(&self) -> Result<Arc<Vec<u8>>> {
+        self.forced_data
+            .get_or_init(|| forced_ahem_data(&self.data).map(Arc::new).map_err(|error| error.to_string()))
+            .clone()
+            .map_err(|error| {
+                anyhow!("failed to create the forced-font Ahem variant from {}: {error}", self.path.display())
+            })
+    }
+
+    pub(crate) fn original_data(&self) -> Arc<Vec<u8>> {
+        self.data.clone()
     }
 }
 
@@ -411,8 +425,7 @@ pub fn main() -> Result<()> {
         RunMode::AllCss { filter } => run_css_reftests(&args.wpt_dir, &ahem_font, args.browser_font, filter.as_deref()),
         RunMode::Pair { test, reference } => {
             let artifacts = ArtifactWriter::prepare()?;
-            let reference_renderer =
-                ChromeReferenceRenderer::start(&args.wpt_dir, ahem_font.path(), args.browser_font)?;
+            let reference_renderer = ChromeReferenceRenderer::start(&args.wpt_dir, &ahem_font, args.browser_font)?;
             let html = read_html_document(&test).map_err(|error| error.to_string());
             let relation = html
                 .as_ref()
@@ -491,6 +504,228 @@ pub fn ensure_wpt_checkout(wpt_dir: &Path) -> Result<()> {
     Ok(())
 }
 
+#[derive(Clone, Copy, Debug)]
+struct SfntTable {
+    checksum_offset: usize,
+    offset: usize,
+    length: usize,
+}
+
+#[derive(Clone, Copy, Debug)]
+struct Format4Layout {
+    end_codes: usize,
+    start_codes: usize,
+    deltas: usize,
+    range_offsets: usize,
+    limit: usize,
+    segment_count: usize,
+}
+
+fn forced_ahem_data(source: &[u8]) -> Result<Vec<u8>> {
+    ensure!(sfnt_u32(source, 0)? == 0x0001_0000, "Ahem font is not a TrueType sfnt");
+    let cmap = sfnt_table(source, *b"cmap")?;
+    let head = sfnt_table(source, *b"head")?;
+    ensure!(head.length >= 12, "Ahem head table is too short");
+
+    let subtables = unicode_format4_subtables(source, cmap)?;
+    let mut data = source.to_vec();
+    let mut patched = false;
+    for subtable in subtables {
+        let layout = format4_layout(&data, subtable, cmap.offset + cmap.length)?;
+        if format4_glyph_id(&data, layout, 0x27)? != 0 {
+            continue;
+        }
+
+        let segment = (0..layout.segment_count)
+            .find(|&index| {
+                sfnt_u16(&data, layout.start_codes + index * 2).ok() == Some(0x20)
+                    && sfnt_u16(&data, layout.end_codes + index * 2).ok() == Some(0x26)
+            })
+            .ok_or_else(|| anyhow!("Ahem cmap does not contain the expected U+0020..U+0026 segment"))?;
+        ensure!(segment + 1 < layout.segment_count, "Ahem cmap ends before the U+0028 segment");
+        ensure!(
+            sfnt_u16(&data, layout.start_codes + (segment + 1) * 2)? == 0x28,
+            "Ahem cmap does not contain the expected adjacent U+0028 segment"
+        );
+        ensure!(
+            sfnt_u16(&data, layout.range_offsets + segment * 2)? == 0,
+            "Ahem U+0020 segment uses an unsupported glyph array"
+        );
+
+        let delta = sfnt_u16(&data, layout.deltas + segment * 2)?;
+        let apostrophe_glyph = 0x27_u16.wrapping_add(delta);
+        let next_glyph = format4_glyph_id(&data, layout, 0x28)?;
+        ensure!(
+            apostrophe_glyph != 0 && apostrophe_glyph == next_glyph,
+            "extending the Ahem cmap would not select its normal square glyph"
+        );
+
+        sfnt_write_u16(&mut data, layout.end_codes + segment * 2, 0x27)?;
+        patched = true;
+    }
+
+    if !patched {
+        return Ok(data);
+    }
+
+    let cmap_checksum = sfnt_checksum(&data[cmap.offset..cmap.offset + cmap.length]);
+    sfnt_write_u32(&mut data, cmap.checksum_offset, cmap_checksum)?;
+
+    let adjustment_offset = head.offset + 8;
+    sfnt_write_u32(&mut data, adjustment_offset, 0)?;
+    let head_checksum = sfnt_checksum(&data[head.offset..head.offset + head.length]);
+    sfnt_write_u32(&mut data, head.checksum_offset, head_checksum)?;
+    let adjustment = 0xB1B0_AFBA_u32.wrapping_sub(sfnt_checksum(&data));
+    sfnt_write_u32(&mut data, adjustment_offset, adjustment)?;
+    ensure!(sfnt_checksum(&data) == 0xB1B0_AFBA, "failed to repair the forced Ahem checksum");
+
+    for subtable in unicode_format4_subtables(&data, cmap)? {
+        ensure!(
+            format4_glyph_id(&data, format4_layout(&data, subtable, cmap.offset + cmap.length)?, 0x27)? != 0,
+            "forced Ahem still does not cover U+0027"
+        );
+    }
+    Ok(data)
+}
+
+fn sfnt_table(data: &[u8], tag: [u8; 4]) -> Result<SfntTable> {
+    let table_count = sfnt_u16(data, 4)? as usize;
+    let directory_end = 12_usize
+        .checked_add(table_count.checked_mul(16).ok_or_else(|| anyhow!("sfnt table count overflow"))?)
+        .ok_or_else(|| anyhow!("sfnt directory overflow"))?;
+    ensure!(directory_end <= data.len(), "truncated sfnt table directory");
+
+    for index in 0..table_count {
+        let record = 12 + index * 16;
+        if data[record..record + 4] != tag {
+            continue;
+        }
+        let offset = sfnt_u32(data, record + 8)? as usize;
+        let length = sfnt_u32(data, record + 12)? as usize;
+        let end = offset.checked_add(length).ok_or_else(|| anyhow!("sfnt table range overflow"))?;
+        ensure!(end <= data.len(), "truncated {} table", String::from_utf8_lossy(&tag));
+        return Ok(SfntTable { checksum_offset: record + 4, offset, length });
+    }
+    bail!("Ahem font has no {} table", String::from_utf8_lossy(&tag))
+}
+
+fn unicode_format4_subtables(data: &[u8], cmap: SfntTable) -> Result<Vec<usize>> {
+    ensure!(cmap.length >= 4, "Ahem cmap table is too short");
+    ensure!(sfnt_u16(data, cmap.offset)? == 0, "unsupported Ahem cmap version");
+    let record_count = sfnt_u16(data, cmap.offset + 2)? as usize;
+    let records_end = cmap
+        .offset
+        .checked_add(4 + record_count.checked_mul(8).ok_or_else(|| anyhow!("cmap record count overflow"))?)
+        .ok_or_else(|| anyhow!("cmap record range overflow"))?;
+    ensure!(records_end <= cmap.offset + cmap.length, "truncated Ahem cmap encoding records");
+
+    let mut subtables = Vec::new();
+    for index in 0..record_count {
+        let record = cmap.offset + 4 + index * 8;
+        let platform = sfnt_u16(data, record)?;
+        let encoding = sfnt_u16(data, record + 2)?;
+        if platform != 0 && !(platform == 3 && matches!(encoding, 1 | 10)) {
+            continue;
+        }
+        let relative = sfnt_u32(data, record + 4)? as usize;
+        let subtable = cmap.offset.checked_add(relative).ok_or_else(|| anyhow!("cmap subtable range overflow"))?;
+        let subtable_header_end = subtable.checked_add(2).ok_or_else(|| anyhow!("cmap subtable range overflow"))?;
+        ensure!(subtable_header_end <= cmap.offset + cmap.length, "truncated Ahem cmap subtable");
+        let format = sfnt_u16(data, subtable)?;
+        ensure!(format == 4, "forced Ahem requires Unicode format-4 cmaps, but found format {format}");
+        if !subtables.contains(&subtable) {
+            subtables.push(subtable);
+        }
+    }
+    ensure!(!subtables.is_empty(), "Ahem font has no Unicode format-4 cmap");
+    Ok(subtables)
+}
+
+fn format4_layout(data: &[u8], subtable: usize, table_limit: usize) -> Result<Format4Layout> {
+    ensure!(sfnt_u16(data, subtable)? == 4, "cmap subtable is not format 4");
+    let length = sfnt_u16(data, subtable + 2)? as usize;
+    let limit = subtable.checked_add(length).ok_or_else(|| anyhow!("format-4 cmap range overflow"))?;
+    ensure!(length >= 16 && limit <= table_limit && table_limit <= data.len(), "truncated format-4 cmap");
+    let segment_count_x2 = sfnt_u16(data, subtable + 6)? as usize;
+    ensure!(segment_count_x2 != 0 && segment_count_x2 % 2 == 0, "invalid format-4 segment count");
+    let segment_count = segment_count_x2 / 2;
+    let end_codes = subtable + 14;
+    let start_codes = end_codes + segment_count * 2 + 2;
+    let deltas = start_codes + segment_count * 2;
+    let range_offsets = deltas + segment_count * 2;
+    let arrays_end =
+        range_offsets.checked_add(segment_count * 2).ok_or_else(|| anyhow!("format-4 cmap arrays overflow"))?;
+    ensure!(arrays_end <= limit, "truncated format-4 cmap arrays");
+    Ok(Format4Layout { end_codes, start_codes, deltas, range_offsets, limit, segment_count })
+}
+
+fn format4_glyph_id(data: &[u8], layout: Format4Layout, codepoint: u16) -> Result<u16> {
+    for index in 0..layout.segment_count {
+        let end = sfnt_u16(data, layout.end_codes + index * 2)?;
+        if codepoint > end {
+            continue;
+        }
+        let start = sfnt_u16(data, layout.start_codes + index * 2)?;
+        if codepoint < start {
+            return Ok(0);
+        }
+        let delta = sfnt_u16(data, layout.deltas + index * 2)?;
+        let range_offset_position = layout.range_offsets + index * 2;
+        let range_offset = sfnt_u16(data, range_offset_position)? as usize;
+        if range_offset == 0 {
+            return Ok(codepoint.wrapping_add(delta));
+        }
+        let glyph_position = range_offset_position
+            .checked_add(range_offset)
+            .and_then(|position| position.checked_add((codepoint - start) as usize * 2))
+            .ok_or_else(|| anyhow!("format-4 glyph index overflow"))?;
+        ensure!(glyph_position + 2 <= layout.limit, "format-4 glyph index is out of bounds");
+        let glyph = sfnt_u16(data, glyph_position)?;
+        return Ok(if glyph == 0 { 0 } else { glyph.wrapping_add(delta) });
+    }
+    Ok(0)
+}
+
+fn sfnt_u16(data: &[u8], offset: usize) -> Result<u16> {
+    let bytes: [u8; 2] = data
+        .get(offset..offset + 2)
+        .ok_or_else(|| anyhow!("truncated sfnt data"))?
+        .try_into()
+        .expect("slice length was checked");
+    Ok(u16::from_be_bytes(bytes))
+}
+
+fn sfnt_u32(data: &[u8], offset: usize) -> Result<u32> {
+    let bytes: [u8; 4] = data
+        .get(offset..offset + 4)
+        .ok_or_else(|| anyhow!("truncated sfnt data"))?
+        .try_into()
+        .expect("slice length was checked");
+    Ok(u32::from_be_bytes(bytes))
+}
+
+fn sfnt_write_u16(data: &mut [u8], offset: usize, value: u16) -> Result<()> {
+    data.get_mut(offset..offset + 2)
+        .ok_or_else(|| anyhow!("truncated sfnt data"))?
+        .copy_from_slice(&value.to_be_bytes());
+    Ok(())
+}
+
+fn sfnt_write_u32(data: &mut [u8], offset: usize, value: u32) -> Result<()> {
+    data.get_mut(offset..offset + 4)
+        .ok_or_else(|| anyhow!("truncated sfnt data"))?
+        .copy_from_slice(&value.to_be_bytes());
+    Ok(())
+}
+
+fn sfnt_checksum(data: &[u8]) -> u32 {
+    data.chunks(4).fold(0_u32, |checksum, chunk| {
+        let mut bytes = [0; 4];
+        bytes[..chunk.len()].copy_from_slice(chunk);
+        checksum.wrapping_add(u32::from_be_bytes(bytes))
+    })
+}
+
 pub fn load_ahem_font(explicit_path: &Option<PathBuf>, wpt_dir: &Path) -> Result<AhemFont> {
     let path = if let Some(path) = explicit_path {
         fs::metadata(path).with_context(|| format!("Ahem font not found at {}", path.display()))?;
@@ -506,7 +741,7 @@ pub fn load_ahem_font(explicit_path: &Option<PathBuf>, wpt_dir: &Path) -> Result
         })?
     };
     let data = fs::read(&path).with_context(|| format!("failed to read Ahem font at {}", path.display()))?;
-    Ok(AhemFont { path, data: Arc::new(data) })
+    Ok(AhemFont { path, data: Arc::new(data), forced_data: Arc::new(OnceLock::new()) })
 }
 
 pub fn run_css_reftests(wpt_dir: &Path, ahem_font: &AhemFont, browser_font: bool, filter: Option<&str>) -> Result<()> {
@@ -523,7 +758,7 @@ pub fn run_css_reftests(wpt_dir: &Path, ahem_font: &AhemFont, browser_font: bool
     }
 
     let artifacts = ArtifactWriter::prepare()?;
-    let reference_renderer = ChromeReferenceRenderer::start(wpt_dir, ahem_font.path(), browser_font)?;
+    let reference_renderer = ChromeReferenceRenderer::start(wpt_dir, ahem_font, browser_font)?;
     let results = run_reftests_in_parallel(&tests, wpt_dir, &artifacts, ahem_font, &reference_renderer)?;
     let passed = results.iter().filter(|result| result.status == TestStatus::Pass).count();
     let failed = results.iter().filter(|result| result.status == TestStatus::Fail).count();
@@ -990,7 +1225,7 @@ pub fn run_reftest_pair(test_path: &Path, reference_path: &Path) -> Result<usize
     let wpt_dir = default_wpt_dir();
     let ahem_font = load_ahem_font(&None, &wpt_dir)?;
     let test = render_reftest_document(test_path, &ahem_font, false)?;
-    let reference = ChromeReferenceRenderer::start(&wpt_dir, ahem_font.path(), false)?.screenshot(reference_path)?;
+    let reference = ChromeReferenceRenderer::start(&wpt_dir, &ahem_font, false)?.screenshot(reference_path)?;
     let html = read_html_document(test_path)?;
     let relation =
         reftest_relation_for_reference(&html, &wpt_dir, test_path, reference_path).unwrap_or(ReferenceRelation::Match);

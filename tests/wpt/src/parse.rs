@@ -49,8 +49,8 @@ pub fn parse_and_layout_with_path(
     let rules = parse_document_rules_with_path(&document, source_path)?;
     let root_element = document.root_element();
 
-    let mut font_context = parley::FontContext::new();
-    if font_context.collection.register_fonts(ahem_font.blob(), None).is_empty() {
+    let mut font_context = new_font_context(browser_font);
+    if font_context.collection.register_fonts(ahem_font.blob(browser_font)?, None).is_empty() {
         return Err(anyhow!("failed to register Ahem font from {}", ahem_font.path().display()));
     }
 
@@ -91,6 +91,28 @@ pub fn parse_and_layout_with_path(
     )?;
 
     Ok(render_document)
+}
+
+fn new_font_context(browser_font: bool) -> parley::FontContext {
+    parley::FontContext {
+        collection: parley::fontique::Collection::new(parley::fontique::CollectionOptions {
+            system_fonts: browser_font,
+            ..Default::default()
+        }),
+        ..Default::default()
+    }
+}
+
+#[cfg(test)]
+mod font_context_tests {
+    use super::*;
+
+    #[test]
+    fn forced_ahem_mode_does_not_discover_system_fonts() {
+        let mut context = new_font_context(false);
+
+        assert_eq!(context.collection.family_names().count(), 0);
+    }
 }
 
 fn parse_document_rules_with_path(document: &Html, source_path: Option<&Path>) -> anyhow::Result<Vec<Rule>> {

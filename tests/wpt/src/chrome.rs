@@ -18,7 +18,7 @@ use tokio::runtime::{Builder, Runtime};
 use url::Url;
 use vello_cpu::Pixmap;
 
-use crate::{VIEWPORT_HEIGHT, VIEWPORT_WIDTH};
+use crate::{AhemFont, VIEWPORT_HEIGHT, VIEWPORT_WIDTH};
 
 const REFERENCE_READY_TIMEOUT_MS: usize = 10_000;
 const AHEM_FONT_ROUTE: &str = "__gummy__/Ahem.ttf";
@@ -66,10 +66,14 @@ pub struct ChromeReferenceRenderer {
 }
 
 impl ChromeReferenceRenderer {
-    pub fn start(wpt_dir: &Path, ahem_font: &Path, browser_font: bool) -> Result<Self> {
-        let server = WptHttpServer::start(wpt_dir, ahem_font)?;
+    pub fn start(wpt_dir: &Path, ahem_font: &AhemFont, browser_font: bool) -> Result<Self> {
+        let forced_ahem = (!browser_font).then(|| ahem_font.forced_data()).transpose()?;
+        let original_ahem = browser_font.then(|| ahem_font.original_data());
+        let server = WptHttpServer::start(wpt_dir, forced_ahem, original_ahem)?;
         let runtime = Builder::new_current_thread().enable_all().build().context("failed to create Tokio runtime")?;
-        let client = runtime.block_on(connect_to_chrome()).context("failed to start a managed ChromeDriver session")?;
+        let client = runtime
+            .block_on(connect_to_chrome(browser_font))
+            .context("failed to start a managed ChromeDriver session")?;
         if let Err(error) = runtime.block_on(configure_viewport(&client)) {
             let _ = runtime.block_on(client.quit());
             return Err(error).context("failed to configure Chrome's reference-test viewport");
@@ -110,19 +114,21 @@ struct ChromeSession {
     runtime: Runtime,
 }
 
-async fn connect_to_chrome() -> Result<WebDriver> {
+async fn connect_to_chrome(browser_font: bool) -> Result<WebDriver> {
     let mut capabilities = DesiredCapabilities::chrome();
     for argument in [
         "--headless=new",
         "--disable-background-networking",
         "--disable-lcd-text",
-        "--enable-blink-features=NoFontAntialiasing",
         "--force-color-profile=srgb",
         "--force-device-scale-factor=1",
         "--no-first-run",
         &format!("--window-size={VIEWPORT_WIDTH},{VIEWPORT_HEIGHT}"),
     ] {
         capabilities.add_arg(argument)?;
+    }
+    if !browser_font {
+        capabilities.add_arg("--enable-blink-features=NoFontAntialiasing")?;
     }
     Ok(WebDriver::managed(capabilities)
         .driver_binary(BrowserKind::Chrome, "chromedriver")
@@ -246,11 +252,9 @@ struct WptHttpServer {
 }
 
 impl WptHttpServer {
-    fn start(root: &Path, ahem_font: &Path) -> Result<Self> {
+    fn start(root: &Path, forced_ahem: Option<Arc<Vec<u8>>>, original_ahem: Option<Arc<Vec<u8>>>) -> Result<Self> {
         let root =
             fs::canonicalize(root).with_context(|| format!("failed to resolve WPT directory {}", root.display()))?;
-        let ahem_font = fs::canonicalize(ahem_font)
-            .with_context(|| format!("failed to resolve Ahem font {}", ahem_font.display()))?;
         let server =
             Server::http(("127.0.0.1", 0)).map_err(|error| anyhow!("failed to start WPT HTTP server: {error}"))?;
         let address =
@@ -258,8 +262,8 @@ impl WptHttpServer {
         let shutdown = Arc::new(AtomicBool::new(false));
         let thread_shutdown = shutdown.clone();
         let thread_root = root.clone();
-        let thread_ahem_font = ahem_font.clone();
-        let thread = thread::spawn(move || serve_wpt(server, &thread_root, &thread_ahem_font, &thread_shutdown));
+        let thread =
+            thread::spawn(move || serve_wpt(server, &thread_root, &forced_ahem, &original_ahem, &thread_shutdown));
         Ok(Self { root, address, shutdown, thread: Some(thread) })
     }
 
@@ -294,23 +298,44 @@ impl Drop for WptHttpServer {
     }
 }
 
-fn serve_wpt(server: Server, root: &Path, ahem_font: &Path, shutdown: &AtomicBool) {
+fn serve_wpt(
+    server: Server,
+    root: &Path,
+    forced_ahem: &Option<Arc<Vec<u8>>>,
+    original_ahem: &Option<Arc<Vec<u8>>>,
+    shutdown: &AtomicBool,
+) {
     while !shutdown.load(Ordering::Relaxed) {
         match server.recv_timeout(Duration::from_millis(100)) {
-            Ok(Some(request)) => respond_with_file(request, root, ahem_font),
+            Ok(Some(request)) => respond_with_file(request, root, forced_ahem, original_ahem),
             Ok(None) => {}
             Err(_) => break,
         }
     }
 }
 
-fn respond_with_file(request: tiny_http::Request, root: &Path, ahem_font: &Path) {
+fn respond_with_file(
+    request: tiny_http::Request,
+    root: &Path,
+    forced_ahem: &Option<Arc<Vec<u8>>>,
+    original_ahem: &Option<Arc<Vec<u8>>>,
+) {
     let Some(relative) = request_path(request.url()) else {
         let _ = request.respond(Response::empty(StatusCode(400)));
         return;
     };
     if relative == Path::new(AHEM_FONT_ROUTE) {
-        respond_with_path(request, ahem_font);
+        if let Some(ahem_font) = forced_ahem {
+            respond_with_data(request, ahem_font, "font/ttf");
+        } else {
+            let _ = request.respond(Response::empty(StatusCode(404)));
+        }
+        return;
+    }
+    if relative == Path::new("fonts/Ahem.ttf")
+        && let Some(ahem_font) = original_ahem
+    {
+        respond_with_data(request, ahem_font, "font/ttf");
         return;
     }
     let path = root.join(relative);
@@ -324,6 +349,15 @@ fn respond_with_file(request: tiny_http::Request, root: &Path, ahem_font: &Path)
     }
 
     respond_with_path(request, &path);
+}
+
+fn respond_with_data(request: tiny_http::Request, data: &Arc<Vec<u8>>, content_type: &'static str) {
+    let content_type = Header::from_bytes("Content-Type", content_type).expect("static content type is valid");
+    if request.method() == &Method::Head {
+        let _ = request.respond(Response::empty(StatusCode(200)).with_header(content_type));
+    } else {
+        let _ = request.respond(Response::from_data(data.as_ref().clone()).with_header(content_type));
+    }
 }
 
 fn respond_with_path(request: tiny_http::Request, path: &Path) {
