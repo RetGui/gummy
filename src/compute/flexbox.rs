@@ -154,7 +154,7 @@ struct AlgoConstants {
     /// The align_content property of this node
     align_content: AlignContent,
     /// The justify_content property of this node
-    justify_content: Option<JustifyContent>,
+    justify_content: JustifyContent,
 
     /// The border-box size of the node being laid out (if known)
     node_outer_size: Size<Option<f32>>,
@@ -165,6 +165,40 @@ struct AlgoConstants {
     container_size: Size<f32>,
     /// The size of the internal container
     inner_container_size: Size<f32>,
+}
+
+
+#[inline]
+fn resolve_flex_align_items(align_items: AlignItems) -> AlignItems {
+    match align_items.keyword() {
+        AlignItemsKeyword::Normal | AlignItemsKeyword::Auto => AlignItems::STRETCH,
+        _ => align_items,
+    }
+}
+
+#[inline]
+fn resolve_flex_align_self(align_self: AlignSelf, align_items: AlignItems) -> AlignSelf {
+    match align_self.keyword() {
+        AlignItemsKeyword::Auto => align_items,
+        AlignItemsKeyword::Normal => AlignSelf::STRETCH,
+        _ => align_self,
+    }
+}
+
+#[inline]
+fn resolve_flex_align_content(align_content: AlignContent) -> AlignContent {
+    match align_content.keyword() {
+        AlignContentKeyword::Normal => AlignContent::STRETCH,
+        _ => align_content,
+    }
+}
+
+#[inline]
+fn resolve_flex_justify_content(justify_content: JustifyContent) -> JustifyContent {
+    match justify_content.keyword() {
+        AlignContentKeyword::Normal => JustifyContent::FLEX_START,
+        _ => justify_content,
+    }
 }
 
 /// Computes the layout of a box according to the flexbox algorithm
@@ -472,9 +506,9 @@ fn compute_constants(
     let box_sizing_adjustment =
         if style.box_sizing() == BoxSizing::ContentBox { padding_border_sum } else { Size::ZERO };
 
-    let align_items = style.align_items().unwrap_or(AlignItems::STRETCH);
-    let align_content = style.align_content().unwrap_or(AlignContent::STRETCH);
-    let justify_content = style.justify_content();
+    let align_items = resolve_flex_align_items(style.align_items());
+    let align_content = resolve_flex_align_content(style.align_content());
+    let justify_content = resolve_flex_justify_content(style.justify_content());
     let layout_direction = style.direction();
 
     // Scrollbar gutters are reserved when the `overflow` property is set to `Overflow::Scroll`.
@@ -600,11 +634,8 @@ fn generate_anonymous_flex_items(
             border: flex_item_style
                 .border()
                 .resolve_or_zero(constants.node_inner_size.width, |val, basis| tree.calc(val, basis)),
-            align_self: flex_item_style.align_self().unwrap_or(constants.align_items).resolve_self_relative(
-                flex_item_style.direction(),
-                constants.layout_direction,
-                constants.is_column,
-            ),
+            align_self: resolve_flex_align_self(flex_item_style.align_self(), constants.align_items)
+                .resolve_self_relative(flex_item_style.direction(), constants.layout_direction, constants.is_column),
             overflow: flex_item_style.overflow(),
             scrollbar_width: flex_item_style.scrollbar_width(),
             flex_grow: flex_item_style.flex_grow(),
@@ -1778,7 +1809,7 @@ fn distribute_remaining_free_space(flex_lines: &mut [FlexLine], constants: &Algo
         let num_items = line.items.len();
         let layout_reverse = constants.dir.is_reverse();
         let gap = constants.gap.main(constants.dir);
-        let raw_justify_content_mode = constants.justify_content.unwrap_or(JustifyContent::FLEX_START);
+        let raw_justify_content_mode = constants.justify_content;
         let justify_content_mode = apply_alignment_fallback(free_space, num_items, raw_justify_content_mode);
 
         let justify_item = |(i, child): (usize, &mut FlexItem)| {
@@ -1942,6 +1973,9 @@ fn align_flex_items_along_cross_axis(
         // SelfStart/SelfEnd are resolved to Start/End against the item's own direction when
         // flex items are generated.
         AlignItemsKeyword::SelfStart | AlignItemsKeyword::SelfEnd => unreachable!(),
+        AlignItemsKeyword::Normal | AlignItemsKeyword::Auto => {
+            unreachable!("alignment sentinels are resolved before flex item alignment")
+        }
     }
 }
 
@@ -2290,11 +2324,8 @@ fn perform_absolute_layout_on_absolute_children(
         let overflow = child_style.overflow();
         let scrollbar_width = child_style.scrollbar_width();
         let aspect_ratio = child_style.aspect_ratio();
-        let align_self = child_style.align_self().unwrap_or(constants.align_items).resolve_self_relative(
-            child_style.direction(),
-            constants.layout_direction,
-            constants.is_column,
-        );
+        let align_self = resolve_flex_align_self(child_style.align_self(), constants.align_items)
+            .resolve_self_relative(child_style.direction(), constants.layout_direction, constants.is_column);
         let margin = child_style
             .margin()
             .map(|margin| margin.resolve_to_option(inset_relative_size.width, |val, basis| tree.calc(val, basis)));
@@ -2472,15 +2503,12 @@ fn perform_absolute_layout_on_absolute_children(
             // `start`/`end` are writing-mode relative (they flip for RTL but not for
             // reversed flex-directions), whereas `flex-start`/`flex-end` and the
             // distributed keywords' fallbacks are flex-relative.
-            let start_position = match constants.justify_content.unwrap_or(JustifyContent::FLEX_START).keyword() {
+            let start_position = match constants.justify_content.keyword() {
                 AlignContentKeyword::Start => !main_is_rtl,
                 AlignContentKeyword::End => main_is_rtl,
                 _ => true,
             };
-            match (
-                constants.justify_content.unwrap_or(JustifyContent::FLEX_START).keyword(),
-                main_axis_flex_start_reversed,
-            ) {
+            match (constants.justify_content.keyword(), main_axis_flex_start_reversed) {
                 (AlignContentKeyword::SpaceBetween, false)
                 | (AlignContentKeyword::Stretch, false)
                 | (AlignContentKeyword::FlexStart, false)
@@ -2517,6 +2545,9 @@ fn perform_absolute_layout_on_absolute_children(
                         + resolved_margin.main_start(constants.dir)
                         - resolved_margin.main_end(constants.dir))
                         / 2.0
+                }
+                (AlignContentKeyword::Normal, _) => {
+                    unreachable!("justify-content: normal is resolved before flex layout")
                 }
             }
         };
@@ -2595,6 +2626,9 @@ fn perform_absolute_layout_on_absolute_children(
                 // SelfStart/SelfEnd are resolved to Start/End against the item's own direction
                 // where `align_self` is read above.
                 (AlignItemsKeyword::SelfStart | AlignItemsKeyword::SelfEnd, _) => unreachable!(),
+                (AlignItemsKeyword::Normal | AlignItemsKeyword::Auto, _) => {
+                    unreachable!("alignment is resolved before absolute flex item alignment")
+                }
             }
         };
 

@@ -757,11 +757,11 @@ fn apply_typed_property(
         Property::FlexBasis(value, _) => {
             set_if_some(css_length_percentage_auto(value, font_size).map(Into::into), |value| style.flex_basis = value)
         }
-        Property::AlignItems(value, _) => style.align_items = Some(css_align_items(value)),
+        Property::AlignItems(value, _) => style.align_items = css_align_items(value),
         Property::AlignSelf(value, _) => style.align_self = css_align_self(value),
-        Property::AlignContent(value, _) => style.align_content = Some(css_align_content(value)),
-        Property::JustifyContent(value, _) => style.justify_content = Some(css_justify_content(value)),
-        Property::JustifyItems(value) => style.justify_items = Some(css_justify_items(value)),
+        Property::AlignContent(value, _) => style.align_content = css_align_content(value),
+        Property::JustifyContent(value, _) => style.justify_content = css_justify_content(value),
+        Property::JustifyItems(value) => style.justify_items = css_justify_items(value),
         Property::JustifySelf(value) => style.justify_self = css_justify_self(value),
         Property::OverflowX(value) => style.overflow.x = css_overflow(value),
         Property::OverflowY(value) => style.overflow.y = css_overflow(value),
@@ -1102,12 +1102,12 @@ fn apply_unparsed_declaration(
         "flex-shrink" => set_if_parse(value, |parsed| style.flex_shrink = parsed),
         "flex-basis" => set_if_parse(value, |parsed| style.flex_basis = parsed),
         "order"      => set_if_parse(value, |parsed| style.order = parsed),
-        "align-items" => set_if_parse(value, |parsed| style.align_items = Some(parsed)),
-        "align-self" => set_if_parse(value, |parsed| style.align_self = Some(parsed)),
-        "align-content" => set_if_parse(value, |parsed| style.align_content = Some(parsed)),
-        "justify-content" => set_if_parse(value, |parsed| style.justify_content = Some(parsed)),
-        "justify-items" => set_if_parse(value, |parsed| style.justify_items = Some(parsed)),
-        "justify-self" => set_if_parse(value, |parsed| style.justify_self = Some(parsed)),
+        "align-items" => set_if_parse(value, |parsed| style.align_items = parsed),
+        "align-self" => set_if_parse(value, |parsed| style.align_self = parsed),
+        "align-content" => set_if_parse(value, |parsed| style.align_content = parsed),
+        "justify-content" => set_if_parse(value, |parsed| style.justify_content = parsed),
+        "justify-items" => set_if_parse(value, |parsed| style.justify_items = parsed),
+        "justify-self" => set_if_parse(value, |parsed| style.justify_self = parsed),
         "overflow" => set_if_parse(value, |parsed| style.overflow = Point { x: parsed, y: parsed }),
         "overflow-x" => set_if_some(parse_overflow(value), |parsed| style.overflow.x = parsed),
         "overflow-y" => set_if_some(parse_overflow(value), |parsed| style.overflow.y = parsed),
@@ -1689,7 +1689,8 @@ pub fn css_self_position(value: &lightningcss::properties::align::SelfPosition) 
 pub fn css_align_items(value: &lightningcss::properties::align::AlignItems) -> gummy::AlignItems {
     use lightningcss::properties::align::AlignItems;
     match value {
-        AlignItems::Normal | AlignItems::Stretch => gummy::AlignItems::STRETCH,
+        AlignItems::Normal => gummy::AlignItems::NORMAL,
+        AlignItems::Stretch => gummy::AlignItems::STRETCH,
         AlignItems::BaselinePosition(_) => gummy::AlignItems::BASELINE,
         AlignItems::SelfPosition { overflow, value } => {
             gummy::AlignItems { keyword: css_self_position(value), safety: css_alignment_safety(overflow.as_ref()) }
@@ -1697,22 +1698,24 @@ pub fn css_align_items(value: &lightningcss::properties::align::AlignItems) -> g
     }
 }
 
-pub fn css_align_self(value: &lightningcss::properties::align::AlignSelf) -> Option<gummy::AlignSelf> {
+pub fn css_align_self(value: &lightningcss::properties::align::AlignSelf) -> gummy::AlignSelf {
     use lightningcss::properties::align::AlignSelf;
-    Some(match value {
-        AlignSelf::Auto => return None,
-        AlignSelf::Normal | AlignSelf::Stretch => gummy::AlignSelf::STRETCH,
+    match value {
+        AlignSelf::Auto => gummy::AlignSelf::AUTO,
+        AlignSelf::Normal => gummy::AlignSelf::NORMAL,
+        AlignSelf::Stretch => gummy::AlignSelf::STRETCH,
         AlignSelf::BaselinePosition(_) => gummy::AlignSelf::BASELINE,
         AlignSelf::SelfPosition { overflow, value } => {
             gummy::AlignSelf { keyword: css_self_position(value), safety: css_alignment_safety(overflow.as_ref()) }
         }
-    })
+    }
 }
 
 pub fn css_justify_items(value: &lightningcss::properties::align::JustifyItems) -> gummy::JustifyItems {
     use lightningcss::properties::align::{JustifyItems, LegacyJustify};
     match value {
-        JustifyItems::Normal | JustifyItems::Stretch => gummy::JustifyItems::STRETCH,
+        JustifyItems::Normal => gummy::JustifyItems::NORMAL,
+        JustifyItems::Stretch => gummy::JustifyItems::STRETCH,
         JustifyItems::BaselinePosition(_) => gummy::JustifyItems::BASELINE,
         JustifyItems::SelfPosition { overflow, value } => {
             gummy::JustifyItems { keyword: css_self_position(value), safety: css_alignment_safety(overflow.as_ref()) }
@@ -1731,11 +1734,12 @@ pub fn css_justify_items(value: &lightningcss::properties::align::JustifyItems) 
     }
 }
 
-pub fn css_justify_self(value: &lightningcss::properties::align::JustifySelf) -> Option<gummy::JustifySelf> {
+pub fn css_justify_self(value: &lightningcss::properties::align::JustifySelf) -> gummy::JustifySelf {
     use lightningcss::properties::align::JustifySelf;
-    Some(match value {
-        JustifySelf::Auto => return None,
-        JustifySelf::Normal | JustifySelf::Stretch => gummy::JustifySelf::STRETCH,
+    match value {
+        JustifySelf::Auto => gummy::JustifySelf::AUTO,
+        JustifySelf::Normal => gummy::JustifySelf::NORMAL,
+        JustifySelf::Stretch => gummy::JustifySelf::STRETCH,
         JustifySelf::BaselinePosition(_) => gummy::JustifySelf::BASELINE,
         JustifySelf::SelfPosition { overflow, value } => {
             gummy::JustifySelf { keyword: css_self_position(value), safety: css_alignment_safety(overflow.as_ref()) }
@@ -1748,7 +1752,7 @@ pub fn css_justify_self(value: &lightningcss::properties::align::JustifySelf) ->
             keyword: gummy::AlignItemsKeyword::End,
             safety: css_alignment_safety(overflow.as_ref()),
         },
-    })
+    }
 }
 
 pub fn css_content_position(value: &lightningcss::properties::align::ContentPosition) -> gummy::AlignContentKeyword {
@@ -1777,7 +1781,7 @@ pub fn css_content_distribution(
 pub fn css_align_content(value: &lightningcss::properties::align::AlignContent) -> gummy::AlignContent {
     use lightningcss::properties::align::AlignContent;
     match value {
-        AlignContent::Normal => gummy::AlignContent::STRETCH,
+        AlignContent::Normal => gummy::AlignContent::NORMAL,
         AlignContent::BaselinePosition(_) => gummy::AlignContent::START,
         AlignContent::ContentDistribution(value) => {
             gummy::AlignContent { keyword: css_content_distribution(value), safety: gummy::AlignmentSafety::Unsafe }
@@ -1792,7 +1796,7 @@ pub fn css_align_content(value: &lightningcss::properties::align::AlignContent) 
 pub fn css_justify_content(value: &lightningcss::properties::align::JustifyContent) -> gummy::JustifyContent {
     use lightningcss::properties::align::JustifyContent;
     match value {
-        JustifyContent::Normal => gummy::JustifyContent::STRETCH,
+        JustifyContent::Normal => gummy::JustifyContent::NORMAL,
         JustifyContent::ContentDistribution(value) => {
             gummy::JustifyContent { keyword: css_content_distribution(value), safety: gummy::AlignmentSafety::Unsafe }
         }

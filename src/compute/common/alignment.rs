@@ -99,6 +99,9 @@ pub(crate) fn compute_alignment_offset(
                     free_space / 2.0
                 }
             }
+            AlignContentKeyword::Normal => {
+                unreachable!("normal alignment must be resolved before computing offsets")
+            }
         }
     } else {
         let free_space = free_space.max(0.0);
@@ -112,6 +115,9 @@ pub(crate) fn compute_alignment_offset(
             AlignContentKeyword::SpaceBetween => free_space / (num_items - 1) as f32,
             AlignContentKeyword::SpaceAround => free_space / num_items as f32,
             AlignContentKeyword::SpaceEvenly => free_space / (num_items + 1) as f32,
+            AlignContentKeyword::Normal => {
+                unreachable!("normal alignment must be resolved before computing offsets")
+            }
         }
     }
 }

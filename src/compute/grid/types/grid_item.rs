@@ -3,11 +3,25 @@ use super::GridTrack;
 use crate::compute::grid::OriginZeroLine;
 use crate::geometry::AbstractAxis;
 use crate::geometry::{Line, Point, Rect, Size};
-use crate::style::{AlignItems, AlignSelf, AvailableSpace, Dimension, LengthPercentageAuto, Overflow};
+use crate::style::{
+    AlignItems, AlignItemsKeyword, AlignSelf, AvailableSpace, Dimension, LengthPercentageAuto, Overflow,
+};
 use crate::tree::{LayoutPartialTree, LayoutPartialTreeExt, NodeId, SizingMode};
 use crate::util::{MaybeMath, MaybeResolve, ResolveOrZero};
 use crate::{BoxSizing, GridItemStyle, LengthPercentage};
 use core::ops::Range;
+
+#[inline]
+fn resolve_grid_item_alignment_for_sizing(self_alignment: AlignSelf, parent_alignment: AlignItems) -> AlignSelf {
+    let inherited_alignment = match self_alignment.keyword() {
+        AlignItemsKeyword::Auto => parent_alignment,
+        _ => self_alignment,
+    };
+    match inherited_alignment.keyword() {
+        AlignItemsKeyword::Normal | AlignItemsKeyword::Auto => AlignSelf::STRETCH,
+        _ => inherited_alignment,
+    }
+}
 
 /// Represents a single grid item
 #[derive(Debug)]
@@ -49,9 +63,9 @@ pub(in super::super) struct GridItem {
     pub border: Rect<LengthPercentage>,
     /// The item's margin style
     pub margin: Rect<LengthPercentageAuto>,
-    /// The item's align_self property, or the parent's align_items property is not set
+    /// The resolved align-self value used during grid track sizing
     pub align_self: AlignSelf,
-    /// The item's justify_self property, or the parent's justify_items property is not set
+    /// The resolved justify-self value used during grid track sizing
     pub justify_self: AlignSelf,
     /// The items first baseline (horizontal)
     pub baseline: Option<f32>,
@@ -117,8 +131,8 @@ impl GridItem {
             padding: style.padding(),
             border: style.border(),
             margin: style.margin(),
-            align_self: style.align_self().unwrap_or(parent_align_items),
-            justify_self: style.justify_self().unwrap_or(parent_justify_items),
+            align_self: resolve_grid_item_alignment_for_sizing(style.align_self(), parent_align_items),
+            justify_self: resolve_grid_item_alignment_for_sizing(style.justify_self(), parent_justify_items),
             baseline: None,
             baseline_shim: 0.0,
             row_indexes: Line { start: 0, end: 0 }, // Properly initialised later

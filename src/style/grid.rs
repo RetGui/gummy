@@ -1,7 +1,7 @@
 //! Style types for CSS Grid layout
 use super::{
     AlignContent, AlignItems, AlignSelf, CheapCloneStr, CompactLength, CoreStyle, Dimension, JustifyContent,
-    LengthPercentage, LengthPercentageAuto, Style,
+    JustifyItems, JustifySelf, LengthPercentage, LengthPercentageAuto, Style,
 };
 use crate::compute::grid::{GridCoordinate, GridLine, OriginZeroLine};
 use crate::geometry::{AbsoluteAxis, AbstractAxis, Line, MinMax, Size};
@@ -197,22 +197,22 @@ pub trait GridContainerStyle: CoreStyle {
 
     /// How should content contained within this item be aligned in the cross/block axis
     #[inline(always)]
-    fn align_content(&self) -> Option<AlignContent> {
+    fn align_content(&self) -> AlignContent {
         Style::<Self::CustomIdent>::DEFAULT.align_content
     }
     /// How should contained within this item be aligned in the main/inline axis
     #[inline(always)]
-    fn justify_content(&self) -> Option<JustifyContent> {
+    fn justify_content(&self) -> JustifyContent {
         Style::<Self::CustomIdent>::DEFAULT.justify_content
     }
     /// How this node's children aligned in the cross/block axis?
     #[inline(always)]
-    fn align_items(&self) -> Option<AlignItems> {
+    fn align_items(&self) -> AlignItems {
         Style::<Self::CustomIdent>::DEFAULT.align_items
     }
     /// How this node's children should be aligned in the inline axis
     #[inline(always)]
-    fn justify_items(&self) -> Option<AlignItems> {
+    fn justify_items(&self) -> JustifyItems {
         Style::<Self::CustomIdent>::DEFAULT.justify_items
     }
 
@@ -228,9 +228,13 @@ pub trait GridContainerStyle: CoreStyle {
     /// Get a grid container's align-content or justify-content alignment depending on the axis passed
     #[inline(always)]
     fn grid_align_content(&self, axis: AbstractAxis) -> AlignContent {
-        match axis {
-            AbstractAxis::Inline => self.justify_content().unwrap_or(AlignContent::STRETCH),
-            AbstractAxis::Block => self.align_content().unwrap_or(AlignContent::STRETCH),
+        let alignment = match axis {
+            AbstractAxis::Inline => self.justify_content(),
+            AbstractAxis::Block => self.align_content(),
+        };
+        match alignment.keyword() {
+            super::AlignContentKeyword::Normal => AlignContent::STRETCH,
+            _ => alignment,
         }
     }
 }
@@ -249,15 +253,15 @@ pub trait GridItemStyle: CoreStyle {
     }
 
     /// How this node should be aligned in the cross/block axis
-    /// Falls back to the parents [`AlignItems`] if not set
+    /// [`AlignSelf::AUTO`] falls back to the parent's [`AlignItems`]
     #[inline(always)]
-    fn align_self(&self) -> Option<AlignSelf> {
+    fn align_self(&self) -> AlignSelf {
         Style::<Self::CustomIdent>::DEFAULT.align_self
     }
     /// How this node should be aligned in the inline axis
-    /// Falls back to the parents [`super::JustifyItems`] if not set
+    /// [`JustifySelf::AUTO`] falls back to the parent's [`super::JustifyItems`]
     #[inline(always)]
-    fn justify_self(&self) -> Option<AlignSelf> {
+    fn justify_self(&self) -> JustifySelf {
         Style::<Self::CustomIdent>::DEFAULT.justify_self
     }
 

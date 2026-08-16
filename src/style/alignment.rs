@@ -54,6 +54,8 @@ pub enum AlignItemsKeyword {
     Baseline,
     /// Stretch to fill the container.
     Stretch,
+    Normal,
+    Auto,
 }
 
 /// The position-keyword half of [`AlignContent`] (and its alias `JustifyContent`).
@@ -85,6 +87,7 @@ pub enum AlignContentKeyword {
     /// The gap between the first and last items is exactly HALF the gap between
     /// items. The gaps are distributed evenly in proportion to these ratios.
     SpaceAround,
+    Normal,
 }
 
 impl AlignContentKeyword {
@@ -100,7 +103,7 @@ impl AlignContentKeyword {
             Self::FlexStart => Self::FlexEnd,
             Self::FlexEnd => Self::FlexStart,
             Self::Stretch => Self::End,
-            Self::Center | Self::SpaceBetween | Self::SpaceEvenly | Self::SpaceAround => self,
+            Self::Center | Self::SpaceBetween | Self::SpaceEvenly | Self::SpaceAround | Self::Normal => self,
         }
     }
 }
@@ -145,6 +148,8 @@ pub struct AlignItems {
 }
 
 impl AlignItems {
+    pub const NORMAL: Self = Self { keyword: AlignItemsKeyword::Normal, safety: AlignmentSafety::Unsafe };
+    pub const AUTO: Self = Self { keyword: AlignItemsKeyword::Auto, safety: AlignmentSafety::Unsafe };
     /// Items are packed toward the start of the axis.
     pub const START: Self = Self { keyword: AlignItemsKeyword::Start, safety: AlignmentSafety::Unsafe };
     /// Items are packed toward the end of the axis.
@@ -276,6 +281,8 @@ impl FromCss for AlignItems {
             "center" => Ok(Self::CENTER),
             "baseline" => Ok(Self::BASELINE),
             "stretch" => Ok(Self::STRETCH),
+            "normal" => Ok(Self::NORMAL),
+            "auto" => Ok(Self::AUTO),
             _ => Err(input.new_unexpected_token_error(Token::Ident(first))),
         }
     }
@@ -321,6 +328,7 @@ pub struct AlignContent {
 }
 
 impl AlignContent {
+    pub const NORMAL: Self = Self { keyword: AlignContentKeyword::Normal, safety: AlignmentSafety::Unsafe };
     /// Items are packed toward the start of the axis.
     pub const START: Self = Self { keyword: AlignContentKeyword::Start, safety: AlignmentSafety::Unsafe };
     /// Items are packed toward the end of the axis.
@@ -369,6 +377,12 @@ impl AlignContent {
     }
 }
 
+impl Default for AlignContent {
+    fn default() -> Self {
+        Self::NORMAL
+    }
+}
+
 #[cfg(feature = "parse")]
 impl FromCss for AlignContent {
     fn from_css<'i>(input: &mut Parser<'i, '_>) -> CssParseResult<'i, Self> {
@@ -405,6 +419,7 @@ impl FromCss for AlignContent {
             "space-between" => Ok(Self::SPACE_BETWEEN),
             "space-evenly" => Ok(Self::SPACE_EVENLY),
             "space-around" => Ok(Self::SPACE_AROUND),
+            "normal" => Ok(Self::NORMAL),
             _ => Err(input.new_unexpected_token_error(Token::Ident(first))),
         }
     }
@@ -430,6 +445,8 @@ pub type JustifyContent = AlignContent;
 /// `unknown_variant` errors. Mirrors the spellings produced by `Serialize`.
 #[cfg(feature = "serde")]
 const ALIGN_ITEMS_NAMES: &[&str] = &[
+    "Normal",
+    "Auto",
     "Start",
     "End",
     "FlexStart",
@@ -452,6 +469,8 @@ const ALIGN_ITEMS_NAMES: &[&str] = &[
 impl serde::Serialize for AlignItems {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         let name = match (self.keyword, self.safety) {
+            (AlignItemsKeyword::Normal, _) => "Normal",
+            (AlignItemsKeyword::Auto, _) => "Auto",
             (AlignItemsKeyword::Start, AlignmentSafety::Unsafe) => "Start",
             (AlignItemsKeyword::End, AlignmentSafety::Unsafe) => "End",
             (AlignItemsKeyword::FlexStart, AlignmentSafety::Unsafe) => "FlexStart",
@@ -484,6 +503,8 @@ impl<'de> serde::Deserialize<'de> for AlignItems {
             }
             fn visit_str<E: serde::de::Error>(self, v: &str) -> Result<Self::Value, E> {
                 Ok(match v {
+                    "Normal" => AlignItems::NORMAL,
+                    "Auto" => AlignItems::AUTO,
                     "Start" => AlignItems::START,
                     "End" => AlignItems::END,
                     "FlexStart" => AlignItems::FLEX_START,
@@ -512,6 +533,7 @@ impl<'de> serde::Deserialize<'de> for AlignItems {
 /// `unknown_variant` errors. Mirrors the spellings produced by `Serialize`.
 #[cfg(feature = "serde")]
 const ALIGN_CONTENT_NAMES: &[&str] = &[
+    "Normal",
     "Start",
     "End",
     "FlexStart",
@@ -532,6 +554,7 @@ const ALIGN_CONTENT_NAMES: &[&str] = &[
 impl serde::Serialize for AlignContent {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         let name = match (self.keyword, self.safety) {
+            (AlignContentKeyword::Normal, _) => "Normal",
             (AlignContentKeyword::Start, AlignmentSafety::Unsafe) => "Start",
             (AlignContentKeyword::End, AlignmentSafety::Unsafe) => "End",
             (AlignContentKeyword::FlexStart, AlignmentSafety::Unsafe) => "FlexStart",
@@ -562,6 +585,7 @@ impl<'de> serde::Deserialize<'de> for AlignContent {
             }
             fn visit_str<E: serde::de::Error>(self, v: &str) -> Result<Self::Value, E> {
                 Ok(match v {
+                    "Normal" => AlignContent::NORMAL,
                     "Start" => AlignContent::START,
                     "End" => AlignContent::END,
                     "FlexStart" => AlignContent::FLEX_START,
@@ -584,6 +608,61 @@ impl<'de> serde::Deserialize<'de> for AlignContent {
     }
 }
 
+#[cfg(feature = "serde")]
+pub(crate) fn deserialize_align_items_or_normal<'de, D>(deserializer: D) -> Result<AlignItems, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    deserialize_alignment_or(deserializer, AlignItems::NORMAL)
+}
+
+#[cfg(feature = "serde")]
+pub(crate) fn deserialize_align_items_or_auto<'de, D>(deserializer: D) -> Result<AlignItems, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    deserialize_alignment_or(deserializer, AlignItems::AUTO)
+}
+
+#[cfg(feature = "serde")]
+pub(crate) fn deserialize_align_content_or_normal<'de, D>(deserializer: D) -> Result<AlignContent, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    deserialize_alignment_or(deserializer, AlignContent::NORMAL)
+}
+
+#[cfg(feature = "serde")]
+fn deserialize_alignment_or<'de, D, T>(deserializer: D, fallback: T) -> Result<T, D::Error>
+where
+    D: serde::Deserializer<'de>,
+    T: serde::Deserialize<'de>,
+{
+    struct NullableAlignment<T>(T);
+
+    impl<'de, T: serde::Deserialize<'de>> serde::de::Visitor<'de> for NullableAlignment<T> {
+        type Value = T;
+
+        fn expecting(&self, formatter: &mut core::fmt::Formatter) -> core::fmt::Result {
+            formatter.write_str("an alignment value or null")
+        }
+
+        fn visit_none<E: serde::de::Error>(self) -> Result<Self::Value, E> {
+            Ok(self.0)
+        }
+
+        fn visit_unit<E: serde::de::Error>(self) -> Result<Self::Value, E> {
+            Ok(self.0)
+        }
+
+        fn visit_some<D: serde::Deserializer<'de>>(self, deserializer: D) -> Result<Self::Value, D::Error> {
+            T::deserialize(deserializer)
+        }
+    }
+
+    deserializer.deserialize_option(NullableAlignment(fallback))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -595,8 +674,6 @@ mod tests {
     fn align_types_within_size_budget() {
         assert!(size_of::<AlignItems>() <= 2, "AlignItems grew to {}", size_of::<AlignItems>());
         assert!(size_of::<AlignContent>() <= 2, "AlignContent grew to {}", size_of::<AlignContent>());
-        assert!(size_of::<Option<AlignItems>>() <= 3);
-        assert!(size_of::<Option<AlignContent>>() <= 3);
     }
 
     #[test]
@@ -617,6 +694,8 @@ mod tests {
         assert!(AlignItems::SAFE_SELF_END.is_safe());
         assert!(!AlignItems::SELF_START.is_safe());
         assert!(!AlignItems::SELF_END.is_safe());
+        assert!(!AlignItems::NORMAL.is_safe());
+        assert!(!AlignItems::AUTO.is_safe());
     }
 
     #[test]
@@ -636,6 +715,8 @@ mod tests {
         assert_eq!(AlignItems::STRETCH.keyword(), AlignItemsKeyword::Stretch);
         assert_eq!(AlignItems::BASELINE.keyword(), AlignItemsKeyword::Baseline);
         assert_eq!(AlignItems::FLEX_START.keyword(), AlignItemsKeyword::FlexStart);
+        assert_eq!(AlignItems::NORMAL.keyword(), AlignItemsKeyword::Normal);
+        assert_eq!(AlignItems::AUTO.keyword(), AlignItemsKeyword::Auto);
     }
 
     #[test]
@@ -672,6 +753,7 @@ mod tests {
         assert!(AlignContent::SAFE_CENTER.is_safe());
         assert!(!AlignContent::SPACE_BETWEEN.is_safe());
         assert!(!AlignContent::STRETCH.is_safe());
+        assert!(!AlignContent::NORMAL.is_safe());
     }
 
     #[test]
@@ -694,6 +776,7 @@ mod tests {
         assert_eq!(AlignContentKeyword::SpaceBetween.reversed(), AlignContentKeyword::SpaceBetween);
         assert_eq!(AlignContentKeyword::SpaceEvenly.reversed(), AlignContentKeyword::SpaceEvenly);
         assert_eq!(AlignContentKeyword::SpaceAround.reversed(), AlignContentKeyword::SpaceAround);
+        assert_eq!(AlignContentKeyword::Normal.reversed(), AlignContentKeyword::Normal);
     }
 
     #[cfg(feature = "parse")]
@@ -708,6 +791,10 @@ mod tests {
         assert_eq!("self-end".parse::<AlignItems>().unwrap(), AlignItems::SELF_END);
         assert_eq!("baseline".parse::<AlignItems>().unwrap(), AlignItems::BASELINE);
         assert_eq!("stretch".parse::<AlignItems>().unwrap(), AlignItems::STRETCH);
+        assert_eq!("normal".parse::<AlignItems>().unwrap(), AlignItems::NORMAL);
+        assert_eq!("auto".parse::<AlignItems>().unwrap(), AlignItems::AUTO);
+        assert_eq!("NoRmAl".parse::<AlignItems>().unwrap(), AlignItems::NORMAL);
+        assert_eq!("AUTO".parse::<AlignItems>().unwrap(), AlignItems::AUTO);
     }
 
     #[cfg(feature = "parse")]
@@ -749,6 +836,10 @@ mod tests {
         assert!("safe garbage".parse::<AlignItems>().is_err());
         assert!("unsafe stretch".parse::<AlignItems>().is_err());
         assert!("unsafe baseline".parse::<AlignItems>().is_err());
+        assert!("safe normal".parse::<AlignItems>().is_err());
+        assert!("unsafe normal".parse::<AlignItems>().is_err());
+        assert!("safe auto".parse::<AlignItems>().is_err());
+        assert!("unsafe auto".parse::<AlignItems>().is_err());
     }
 
     #[cfg(feature = "parse")]
@@ -759,6 +850,9 @@ mod tests {
         assert_eq!("space-evenly".parse::<AlignContent>().unwrap(), AlignContent::SPACE_EVENLY);
         assert_eq!("space-around".parse::<AlignContent>().unwrap(), AlignContent::SPACE_AROUND);
         assert_eq!("stretch".parse::<AlignContent>().unwrap(), AlignContent::STRETCH);
+        assert_eq!("normal".parse::<AlignContent>().unwrap(), AlignContent::NORMAL);
+        assert_eq!("NORMAL".parse::<AlignContent>().unwrap(), AlignContent::NORMAL);
+        assert!("auto".parse::<AlignContent>().is_err());
     }
 
     #[cfg(feature = "parse")]
@@ -788,12 +882,16 @@ mod tests {
         assert!("safe".parse::<AlignContent>().is_err());
         assert!("unsafe stretch".parse::<AlignContent>().is_err());
         assert!("unsafe space-between".parse::<AlignContent>().is_err());
+        assert!("safe normal".parse::<AlignContent>().is_err());
+        assert!("unsafe normal".parse::<AlignContent>().is_err());
     }
 
     #[cfg(feature = "serde")]
     #[test]
     fn serde_align_items_round_trip() {
         let cases = [
+            (AlignItems::NORMAL, "\"Normal\""),
+            (AlignItems::AUTO, "\"Auto\""),
             (AlignItems::START, "\"Start\""),
             (AlignItems::END, "\"End\""),
             (AlignItems::FLEX_START, "\"FlexStart\""),
@@ -824,6 +922,7 @@ mod tests {
     #[test]
     fn serde_align_content_round_trip() {
         let cases = [
+            (AlignContent::NORMAL, "\"Normal\""),
             (AlignContent::START, "\"Start\""),
             (AlignContent::END, "\"End\""),
             (AlignContent::FLEX_START, "\"FlexStart\""),

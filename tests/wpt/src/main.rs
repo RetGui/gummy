@@ -162,22 +162,26 @@ impl TextAlignment {
         }
     }
 
-    fn justify_content(self, direction: gummy::Direction) -> Option<gummy::JustifyContent> {
+    fn justify_content(self, direction: gummy::Direction) -> gummy::JustifyContent {
         match self {
-            Self::Start => Some(gummy::JustifyContent::START),
-            Self::End => Some(gummy::JustifyContent::END),
-            Self::Left => Some(if direction == gummy::Direction::Ltr {
-                gummy::JustifyContent::START
-            } else {
-                gummy::JustifyContent::END
-            }),
-            Self::Right => Some(if direction == gummy::Direction::Ltr {
-                gummy::JustifyContent::END
-            } else {
-                gummy::JustifyContent::START
-            }),
-            Self::Center => Some(gummy::JustifyContent::CENTER),
-            Self::Justify => None,
+            Self::Start => gummy::JustifyContent::START,
+            Self::End => gummy::JustifyContent::END,
+            Self::Left => {
+                if direction == gummy::Direction::Ltr {
+                    gummy::JustifyContent::START
+                } else {
+                    gummy::JustifyContent::END
+                }
+            }
+            Self::Right => {
+                if direction == gummy::Direction::Ltr {
+                    gummy::JustifyContent::END
+                } else {
+                    gummy::JustifyContent::START
+                }
+            }
+            Self::Center => gummy::JustifyContent::CENTER,
+            Self::Justify => gummy::JustifyContent::NORMAL,
         }
     }
 }
@@ -1406,9 +1410,7 @@ pub fn build_element(
     if inline_formatting_context {
         style.display = Display::Flex;
         style.flex_wrap = if render_style.white_space_nowrap { gummy::FlexWrap::NoWrap } else { gummy::FlexWrap::Wrap };
-        if let Some(justify_content) = render_style.text_alignment.justify_content(render_style.direction) {
-            style.justify_content = Some(justify_content);
-        }
+        style.justify_content = render_style.text_alignment.justify_content(render_style.direction);
     }
 
     if style.display == Display::Flex {

@@ -204,6 +204,9 @@ pub(super) fn compute_alignment_gutter_adjustment(
         AlignContentKeyword::SpaceBetween => 0,
         AlignContentKeyword::SpaceAround => 1,
         AlignContentKeyword::SpaceEvenly => 1,
+        AlignContentKeyword::Normal => {
+            unreachable!("normal content alignment is resolved before grid track sizing")
+        }
     };
 
     let inner_gutter_weight = match alignment.keyword() {
@@ -216,6 +219,9 @@ pub(super) fn compute_alignment_gutter_adjustment(
         AlignContentKeyword::SpaceBetween => 1,
         AlignContentKeyword::SpaceAround => 2,
         AlignContentKeyword::SpaceEvenly => 1,
+        AlignContentKeyword::Normal => {
+            unreachable!("normal content alignment is resolved before grid track sizing")
+        }
     };
 
     if inner_gutter_weight == 0 {

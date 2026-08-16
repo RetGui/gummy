@@ -279,12 +279,12 @@ fn build_style<S: CheapCloneStr>(xnode: roxmltree::Node) -> gummy::Style<S> {
         },
 
         aspect_ratio: maybe_parse(xnode.attribute("aspect-ratio")),
-        align_items: maybe_parse(xnode.attribute("align-items")),
-        align_self: maybe_parse(xnode.attribute("align-self")),
-        justify_items: maybe_parse(xnode.attribute("justify-items")),
-        justify_self: maybe_parse(xnode.attribute("justify-self")),
-        align_content: maybe_parse(xnode.attribute("align-content")),
-        justify_content: maybe_parse(xnode.attribute("justify-content")),
+        align_items: parse_or(xnode.attribute("align-items"), gummy::AlignItems::NORMAL),
+        align_self: parse_or(xnode.attribute("align-self"), gummy::AlignSelf::AUTO),
+        justify_items: parse_or(xnode.attribute("justify-items"), gummy::JustifyItems::NORMAL),
+        justify_self: parse_or(xnode.attribute("justify-self"), gummy::JustifySelf::AUTO),
+        align_content: parse_or(xnode.attribute("align-content"), gummy::AlignContent::NORMAL),
+        justify_content: parse_or(xnode.attribute("justify-content"), gummy::JustifyContent::NORMAL),
 
         text_align: parse_or_default(xnode.attribute("text-align")),
         flex_direction: parse_or_default(xnode.attribute("flex-direction")),
@@ -292,6 +292,7 @@ fn build_style<S: CheapCloneStr>(xnode: roxmltree::Node) -> gummy::Style<S> {
         flex_grow: parse_or(xnode.attribute("flex-grow"), 0.0),
         flex_shrink: parse_or(xnode.attribute("flex-shrink"), 1.0),
         flex_basis: parse_or(xnode.attribute("flex-basis"), Dimension::auto()),
+        order: parse_or_default(xnode.attribute("order")),
 
         grid_auto_flow: parse_or_default(xnode.attribute("grid-auto-flow")),
 

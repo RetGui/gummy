@@ -2,7 +2,7 @@
 //! <https://www.w3.org/TR/css-grid-1>
 use crate::geometry::{AbsoluteAxis, AbstractAxis, InBothAbsAxis};
 use crate::geometry::{Line, Point, Rect, Size};
-use crate::style::{AlignItems, AlignSelf, AvailableSpace, Overflow, Position};
+use crate::style::{AlignContentKeyword, AlignItems, AlignItemsKeyword, AlignSelf, AvailableSpace, Overflow, Position};
 use crate::tree::{Layout, LayoutInput, LayoutOutput, LayoutPartialTreeExt, NodeId, RunMode, SizingMode};
 use crate::util::debug::debug_log;
 use crate::util::sys::{f32_max, f32_min, GridTrackVec, Vec};
@@ -10,7 +10,7 @@ use crate::util::MaybeMath;
 use crate::util::{MaybeResolve, ResolveOrZero};
 use crate::{
     style_helpers::*, AlignContent, BoxGenerationMode, BoxSizing, CoreStyle, Direction, GridContainerStyle,
-    GridItemStyle, JustifyContent, LayoutGridContainer, RequestedAxis,
+    GridItemStyle, LayoutGridContainer, RequestedAxis,
 };
 use alignment::{align_and_position_item, align_tracks};
 use explicit_grid::{compute_explicit_grid_size_in_axis, initialize_grid_tracks, AutoRepeatStrategy};
@@ -33,6 +33,22 @@ mod placement;
 mod track_sizing;
 mod types;
 mod util;
+
+#[inline]
+fn resolve_grid_content_alignment(alignment: AlignContent) -> AlignContent {
+    match alignment.keyword() {
+        AlignContentKeyword::Normal => AlignContent::STRETCH,
+        _ => alignment,
+    }
+}
+
+#[inline]
+fn resolve_grid_placement_alignment(alignment: AlignItems) -> AlignItems {
+    match alignment.keyword() {
+        AlignItemsKeyword::Normal | AlignItemsKeyword::Auto => AlignItems::STRETCH,
+        _ => alignment,
+    }
+}
 
 /// Grid layout algorithm
 /// This consists of a few phases:
@@ -95,8 +111,8 @@ pub fn compute_grid_layout<Tree: LayoutGridContainer>(
         Direction::Rtl => content_box_inset.left += scrollbar_gutter.x,
     };
 
-    let align_content = style.align_content().unwrap_or(AlignContent::STRETCH);
-    let justify_content = style.justify_content().unwrap_or(JustifyContent::STRETCH);
+    let align_content = resolve_grid_content_alignment(style.align_content());
+    let justify_content = resolve_grid_content_alignment(style.justify_content());
     let align_items = style.align_items();
     let justify_items = style.justify_items();
 
@@ -237,8 +253,8 @@ pub fn compute_grid_layout<Tree: LayoutGridContainer>(
         in_flow_children_iter,
         direction,
         style.grid_auto_flow(),
-        align_items.unwrap_or(AlignItems::STRETCH),
-        justify_items.unwrap_or(AlignItems::STRETCH),
+        resolve_grid_placement_alignment(align_items),
+        resolve_grid_placement_alignment(justify_items),
         &name_resolver,
     );
 

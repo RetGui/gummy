@@ -142,23 +142,26 @@ fn into_pixels(dim: impl Into<tf::Dimension>) -> f32 {
     dim.into().into_option().unwrap_or(0.0)
 }
 
-fn items_into_align(align: Option<tf::AlignSelf>) -> yg::Align {
+fn items_into_align(align: tf::AlignSelf) -> yg::Align {
     // Yoga has no safe/unsafe overflow-position concept — drop the safety field and dispatch
     // on the bare keyword. Safe and unsafe alike fold to the same yoga keyword.
-    let Some(align) = align else { return yg::Align::Auto };
     match align.keyword {
+        tf::AlignItemsKeyword::Normal | tf::AlignItemsKeyword::Auto => yg::Align::Auto,
         tf::AlignItemsKeyword::FlexStart => yg::Align::FlexStart,
         tf::AlignItemsKeyword::FlexEnd => yg::Align::FlexEnd,
         tf::AlignItemsKeyword::Center => yg::Align::Center,
         tf::AlignItemsKeyword::Baseline => yg::Align::Baseline,
         tf::AlignItemsKeyword::Stretch => yg::Align::Stretch,
-        tf::AlignItemsKeyword::Start | tf::AlignItemsKeyword::End => unimplemented!(),
+        tf::AlignItemsKeyword::Start
+        | tf::AlignItemsKeyword::End
+        | tf::AlignItemsKeyword::SelfStart
+        | tf::AlignItemsKeyword::SelfEnd => unimplemented!(),
     }
 }
 
-fn content_into_align(align: Option<tf::AlignContent>) -> yg::Align {
-    let Some(align) = align else { return yg::Align::Auto };
+fn content_into_align(align: tf::AlignContent) -> yg::Align {
     match align.keyword {
+        tf::AlignContentKeyword::Normal => yg::Align::Auto,
         tf::AlignContentKeyword::FlexStart | tf::AlignContentKeyword::Start => yg::Align::FlexStart,
         tf::AlignContentKeyword::FlexEnd | tf::AlignContentKeyword::End => yg::Align::FlexEnd,
         tf::AlignContentKeyword::Center => yg::Align::Center,
@@ -169,9 +172,9 @@ fn content_into_align(align: Option<tf::AlignContent>) -> yg::Align {
     }
 }
 
-fn content_into_justify(align: Option<tf::JustifyContent>) -> yg::Justify {
-    let Some(align) = align else { return yg::Justify::FlexStart };
+fn content_into_justify(align: tf::JustifyContent) -> yg::Justify {
     match align.keyword {
+        tf::AlignContentKeyword::Normal => yg::Justify::FlexStart,
         tf::AlignContentKeyword::FlexStart | tf::AlignContentKeyword::Start => yg::Justify::FlexStart,
         tf::AlignContentKeyword::FlexEnd | tf::AlignContentKeyword::End => yg::Justify::FlexEnd,
         tf::AlignContentKeyword::Center => yg::Justify::Center,

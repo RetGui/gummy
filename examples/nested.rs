@@ -12,7 +12,7 @@ fn main() -> Result<(), gummy::GummyError> {
     let div1 = gummy.new_with_children(
         Style {
             size: Size { width: Dimension::from_percent(0.5), height: Dimension::from_percent(1.0) },
-            // justify_content: JustifyContent::Center,
+            // justify_content: JustifyContent::CENTER,
             ..Default::default()
         },
         &[child_t1],
@@ -27,7 +27,7 @@ fn main() -> Result<(), gummy::GummyError> {
     let div2 = gummy.new_with_children(
         Style {
             size: Size { width: Dimension::from_percent(0.5), height: Dimension::from_percent(1.0) },
-            // justify_content: JustifyContent::Center,
+            // justify_content: JustifyContent::CENTER,
             ..Default::default()
         },
         &[child_t2],
