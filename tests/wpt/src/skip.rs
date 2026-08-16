@@ -7,15 +7,13 @@ use lightningcss::{
         gradient::{Circle, Ellipse, EndingShape, Gradient, GradientItem, RadialGradient},
         image::Image,
         length::{Length, LengthPercentage},
-        percentage::DimensionPercentage,
         position::{Position, PositionComponent},
     },
-    vendor_prefix::VendorPrefix,
 };
 use scraper::{ElementRef, Html, Selector};
 
 use crate::Declaration;
-use crate::paint::read_html_document;
+use crate::paint::{read_html_document, resolve_angle_percentage, resolve_length_percentage_px};
 use crate::parse::{active_declarations_with_path, css_length_to_px, media_attribute_matches};
 
 pub fn reason_for_pair(test: &Path, reference: &Path, wpt_dir: &Path) -> Option<String> {
@@ -435,15 +433,13 @@ fn unsupported_paint_feature(declarations: &[Declaration]) -> Option<&'static st
     }
 
     let features: &[(&str, &[&str])] = &[
-        ("background-position-x", &["0%", "left"]),
-        ("background-position-y", &["0%", "top"]),
-        ("background-size", &["auto", "auto auto"]),
-        ("background-repeat", &["repeat", "repeat repeat"]),
-        ("background-attachment", &["scroll"]),
-        ("background-origin", &["padding-box"]),
-        ("background-clip", &["border-box"]),
-        ("border-image", &["none"]),
-        ("border-image-source", &["none"]),
+        ("background-position-x", &["0%", "left", "inherit"]),
+        ("background-position-y", &["0%", "top", "inherit"]),
+        ("background-size", &["auto", "auto auto", "inherit"]),
+        ("background-repeat", &["repeat", "repeat repeat", "inherit"]),
+        ("background-attachment", &["scroll", "inherit"]),
+        ("background-origin", &["padding-box", "inherit"]),
+        ("background-clip", &["border-box", "inherit"]),
         ("transform", &["none"]),
         ("perspective", &["none"]),
         ("filter", &["none"]),
@@ -454,28 +450,13 @@ fn unsupported_paint_feature(declarations: &[Declaration]) -> Option<&'static st
         ("mask-image", &["none"]),
         ("visibility", &["visible"]),
         ("content", &["normal", "none"]),
-        ("border-shape", &["none"]),
-        ("corner-shape", &["round"]),
     ];
     for (property, initial_values) in features {
         if property_has_non_initial_value(declarations, property, initial_values) {
             return Some(property);
         }
     }
-
-    for property in [
-        "border-radius",
-        "border-top-left-radius",
-        "border-top-right-radius",
-        "border-bottom-left-radius",
-        "border-bottom-right-radius",
-    ] {
-        if declaration_values(declarations, property)
-            .any(|value| !css_value_is_initial(value) && !css_value_is_zero(value))
-        {
-            return Some(property);
-        }
-    }
+    
     if declaration_values(declarations, "position").any(|value| value.trim() == "sticky") {
         return Some("sticky positioning");
     }
@@ -490,7 +471,7 @@ fn supported_background_image(declaration: &Declaration) -> bool {
             Image::Url(url) => supported_background_url(url.url.as_ref()),
             Image::ImageSet(_) => false,
         }),
-        _ => css_value_is_initial(&declaration.value) || declaration.value.trim() == "none",
+        _ => css_value_is_initial(&declaration.value) || matches!(declaration.value.trim(), "none" | "inherit"),
     }
 }
 
@@ -510,9 +491,6 @@ fn supported_background_url(url: &str) -> bool {
 }
 
 fn supported_gradient(gradient: &Gradient) -> bool {
-    if gradient.get_vendor_prefix() != VendorPrefix::None {
-        return false;
-    }
     match gradient {
         Gradient::Linear(gradient) | Gradient::RepeatingLinear(gradient) => supported_length_stops(&gradient.items),
         Gradient::Radial(gradient) | Gradient::RepeatingRadial(gradient) => supported_radial_gradient(gradient),
@@ -542,19 +520,12 @@ fn supported_length_stops(items: &[GradientItem<LengthPercentage>]) -> bool {
 
 fn supported_radial_stops(items: &[GradientItem<LengthPercentage>]) -> bool {
     supported_stops(items, |position| {
-        supported_length_percentage(position)
-            && match position {
-                DimensionPercentage::Dimension(length) => {
-                    css_length_to_px(length, 16.0).is_some_and(|position| position >= 0.0)
-                }
-                DimensionPercentage::Percentage(percentage) => percentage.0 >= 0.0,
-                DimensionPercentage::Calc(_) => false,
-            }
+        resolve_length_percentage_px(position, 100.0, 16.0).is_some_and(|position| position >= 0.0)
     })
 }
 
 fn supported_angle_stops(items: &[GradientItem<AnglePercentage>]) -> bool {
-    supported_stops(items, |position| !matches!(position, DimensionPercentage::Calc(_)))
+    supported_stops(items, |position| resolve_angle_percentage(position).is_some())
 }
 
 fn supported_stops<D>(items: &[GradientItem<D>], supported_position: impl Fn(&D) -> bool) -> bool {
@@ -577,11 +548,7 @@ fn supported_position_component<S>(position: &PositionComponent<S>) -> bool {
 }
 
 fn supported_length_percentage(value: &LengthPercentage) -> bool {
-    match value {
-        DimensionPercentage::Dimension(length) => css_length_to_px(length, 16.0).is_some(),
-        DimensionPercentage::Percentage(_) => true,
-        DimensionPercentage::Calc(_) => false,
-    }
+    resolve_length_percentage_px(value, 100.0, 16.0).is_some()
 }
 
 fn property_has_non_initial_value(declarations: &[Declaration], property: &str, initial_values: &[&str]) -> bool {
@@ -600,13 +567,6 @@ fn declaration_values<'a>(declarations: &'a [Declaration], property: &'a str) ->
 
 fn css_value_is_initial(value: &str) -> bool {
     matches!(value.trim(), "initial" | "unset" | "revert" | "revert-layer")
-}
-
-fn css_value_is_zero(value: &str) -> bool {
-    value.split_ascii_whitespace().filter(|token| *token != "/" && *token != "!important").all(|token| {
-        let number = token.trim_end_matches(|character: char| character.is_ascii_alphabetic() || character == '%');
-        number.parse::<f32>().is_ok_and(|number| number == 0.0)
-    })
 }
 
 fn has_selector(document: &Html, selector: &str) -> bool {

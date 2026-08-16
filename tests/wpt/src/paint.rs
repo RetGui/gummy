@@ -5,6 +5,7 @@ use std::sync::Arc;
 use anyhow::Context;
 use lightningcss::values::{
     angle::AnglePercentage,
+    calc::{Calc, MathFunction},
     gradient::{
         Circle, ConicGradient, Ellipse, EndingShape, Gradient as CssGradient, GradientItem, LineDirection,
         LinearGradient, RadialGradient, ShapeExtent,
@@ -126,6 +127,9 @@ pub fn render_reftest_document(path: &Path, ahem_font: &AhemFont, browser_font: 
 }
 
 pub fn paint_borders(renderer: &mut RenderContext, x: f32, y: f32, layout: &gummy::Layout, color: &Rect<Color>) {
+    // The WPT layout runner deliberately flattens image-decorated, dotted,
+    // dashed, rounded, and other fancy borders into solid square-cornered
+    // rectangles.
     fill_rect(renderer, x, y, layout.size.width, layout.border.top, color.top);
     fill_rect(
         renderer,
@@ -211,7 +215,7 @@ fn paint_background_images(
     {
         return Ok(());
     }
-    
+
     for image in images.iter().rev() {
         match image {
             BackgroundImage::Gradient(css_gradient) => {
@@ -386,7 +390,7 @@ fn prepare_radial_gradient(
     if radius_x <= f64::EPSILON || radius_y <= f64::EPSILON {
         return solid_from_items(&gradient.items, current_color);
     }
-    
+
     let normalized_diagonal = ((radius_x * radius_x + radius_y * radius_y) * 0.5).sqrt() as f32;
     let stops = resolve_stops(&gradient.items, current_color, |position| {
         resolve_length_percentage(position, normalized_diagonal, font_size)
@@ -577,20 +581,38 @@ fn resolve_length_percentage(value: &CssLengthPercentage, reference: f32, font_s
     Some(resolve_length_percentage_px(value, reference, font_size)? / reference)
 }
 
-fn resolve_length_percentage_px(value: &CssLengthPercentage, reference: f32, font_size: f32) -> Option<f32> {
+pub(crate) fn resolve_length_percentage_px(value: &CssLengthPercentage, reference: f32, font_size: f32) -> Option<f32> {
     match value {
         DimensionPercentage::Dimension(length) => css_length_to_px(length, font_size),
         DimensionPercentage::Percentage(percentage) => Some(reference * percentage.0),
-        DimensionPercentage::Calc(_) => None,
+        DimensionPercentage::Calc(calc) => {
+            resolve_calc_expression(calc, &|value| resolve_length_percentage_px(value, reference, font_size))
+        }
     }
 }
 
-fn resolve_angle_percentage(value: &AnglePercentage) -> Option<f32> {
+pub(crate) fn resolve_angle_percentage(value: &AnglePercentage) -> Option<f32> {
     match value {
         DimensionPercentage::Dimension(angle) => Some(angle.to_radians() / std::f32::consts::TAU),
         DimensionPercentage::Percentage(percentage) => Some(percentage.0),
-        DimensionPercentage::Calc(_) => None,
+        DimensionPercentage::Calc(calc) => resolve_calc_expression(calc, &resolve_angle_percentage),
     }
+}
+
+fn resolve_calc_expression<V>(calc: &Calc<V>, resolve_value: &impl Fn(&V) -> Option<f32>) -> Option<f32> {
+    let value = match calc {
+        Calc::Value(value) => resolve_value(value)?,
+        Calc::Number(value) => *value,
+        Calc::Sum(left, right) => {
+            resolve_calc_expression(left, resolve_value)? + resolve_calc_expression(right, resolve_value)?
+        }
+        Calc::Product(factor, value) => *factor * resolve_calc_expression(value, resolve_value)?,
+        Calc::Function(function) => match function.as_ref() {
+            MathFunction::Calc(value) => resolve_calc_expression(value, resolve_value)?,
+            _ => return None,
+        },
+    };
+    value.is_finite().then_some(value)
 }
 
 fn resolve_position(position: &Position, rect: kurbo::Rect, font_size: f32) -> Option<kurbo::Point> {

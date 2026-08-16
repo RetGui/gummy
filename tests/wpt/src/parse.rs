@@ -113,6 +113,36 @@ mod font_context_tests {
 
         assert_eq!(context.collection.family_names().count(), 0);
     }
+
+    #[test]
+    fn explicit_background_inherit_copies_parent_paint() {
+        let parent = RenderStyle {
+            background: Some(Color::from_rgba8(0, 0, 255, 255)),
+            background_images: vec![crate::BackgroundImage::Url("tile.png".to_owned())],
+            ..RenderStyle::default()
+        };
+        let mut child = RenderStyle::default();
+
+        apply_unparsed_declaration(&mut Style::default(), &mut child, "background", "inherit", Some(&parent));
+
+        assert_eq!(child.background, parent.background);
+        assert!(matches!(child.background_images.as_slice(), [crate::BackgroundImage::Url(url)] if url == "tile.png"));
+    }
+
+    #[test]
+    fn invalid_background_image_does_not_override_a_valid_declaration() {
+        let html = r#"<style>
+            div {
+                background-image: linear-gradient(green, green);
+                background-image: linear-gradient(90degree, red, red);
+            }
+        </style><div></div>"#;
+        let declarations = active_declarations_with_path(html, None).unwrap();
+        let background = declarations.iter().find(|declaration| declaration.property == "background-image").unwrap();
+
+        assert!(background.value.contains("green"));
+        assert!(!background.value.contains("90degree"));
+    }
 }
 
 fn parse_document_rules_with_path(document: &Html, source_path: Option<&Path>) -> anyhow::Result<Vec<Rule>> {
@@ -998,8 +1028,7 @@ fn apply_unparsed_declaration(
     value: &str,
     inherited: Option<&RenderStyle>,
 ) {
-    if matches!(value, "inherit" | "unset")
-        && is_inherited_property(property)
+    if (value == "inherit" || value == "unset" && is_inherited_property(property))
         && let Some(inherited) = inherited
     {
         apply_inherited_value(style, render_style, property, inherited);
@@ -1320,6 +1349,12 @@ pub fn apply_inherited_value(
     inherited: &RenderStyle,
 ) {
     match property {
+        "background" => {
+            render_style.background = inherited.background;
+            render_style.background_images = inherited.background_images.clone();
+        }
+        "background-color" => render_style.background = inherited.background,
+        "background-image" => render_style.background_images = inherited.background_images.clone(),
         "color" => render_style.color = inherited.color,
         "direction" => {
             style.direction = inherited.direction;

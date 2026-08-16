@@ -58,6 +58,52 @@ const AHEM_OVERRIDE_SCRIPT: &str = r#"
     const parent = document.head || document.documentElement;
     parent.insertBefore(style, parent.firstChild);
 "#;
+const BORDER_STYLE_OVERRIDE_SCRIPT: &str = r#"
+    const done = arguments[arguments.length - 1];
+    const applyBorderOverrides = () => {
+        const namespace = document.documentElement.namespaceURI;
+        const style = namespace === 'http://www.w3.org/1999/xhtml'
+            ? document.createElement('style')
+            : document.createElementNS(namespace, 'style');
+        style.textContent = `
+            @layer gummy-border-style-override {
+                *, *::before, *::after {
+                    border-image: none !important;
+                    border-radius: 0 !important;
+                    border-shape: none !important;
+                    corner-shape: round !important;
+                }
+            }
+        `;
+        const parent = document.head || document.documentElement;
+        parent.insertBefore(style, parent.firstChild);
+
+        const sides = ['top', 'right', 'bottom', 'left'];
+        for (const element of document.querySelectorAll('*')) {
+            const computed = getComputedStyle(element);
+            const visibleSides = sides.filter(side => {
+                const borderStyle = computed.getPropertyValue(`border-${side}-style`);
+                return borderStyle !== 'none' && borderStyle !== 'hidden';
+            });
+
+            element.style.setProperty('border-image', 'none', 'important');
+            element.style.setProperty('border-radius', '0', 'important');
+            element.style.setProperty('border-shape', 'none', 'important');
+            element.style.setProperty('corner-shape', 'round', 'important');
+            for (const side of visibleSides) {
+                element.style.setProperty(`border-${side}-style`, 'solid', 'important');
+            }
+        }
+
+        requestAnimationFrame(() => requestAnimationFrame(() => done()));
+    };
+
+    if (document.readyState === 'complete') {
+        applyBorderOverrides();
+    } else {
+        window.addEventListener('load', applyBorderOverrides, { once: true });
+    }
+"#;
 
 pub struct ChromeReferenceRenderer {
     state: Mutex<ChromeSession>,
@@ -226,6 +272,7 @@ async fn capture_reference(client: &WebDriver, url: &str, browser_font: bool) ->
     if let Some(error) = ready {
         bail!("Chrome reference did not become ready: {error}");
     }
+    client.execute_async(BORDER_STYLE_OVERRIDE_SCRIPT, Vec::new()).await?;
     Ok(client.screenshot_as_png().await?)
 }
 

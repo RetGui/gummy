@@ -1818,6 +1818,20 @@ pub fn append_declaration(declarations: &mut Vec<Declaration>, property: &Proper
     let value = property
         .value_to_css_string(PrinterOptions { minify: true, ..PrinterOptions::default() })
         .map_err(|error| anyhow!("failed to serialize CSS property value: {error}"))?;
+    if property_name == "background-image"
+        && matches!(property, Property::Unparsed(_))
+        && !is_css_wide_keyword(&value)
+        && !matches!(
+            Property::parse_string(
+                property.property_id().into_owned(),
+                &value,
+                CssParserOptions { error_recovery: false, ..CssParserOptions::default() },
+            ),
+            Ok(Property::BackgroundImage(_))
+        )
+    {
+        return Ok(());
+    }
     let parsed = if is_css_wide_keyword(&value) {
         typed_initial_value(&property.property_id(), &property_name, &value)
     } else {
