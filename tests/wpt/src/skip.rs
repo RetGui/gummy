@@ -1,10 +1,22 @@
 use std::path::Path;
 
+use lightningcss::{
+    properties::Property,
+    values::{
+        angle::AnglePercentage,
+        gradient::{Circle, Ellipse, EndingShape, Gradient, GradientItem, RadialGradient},
+        image::Image,
+        length::{Length, LengthPercentage},
+        percentage::DimensionPercentage,
+        position::{Position, PositionComponent},
+    },
+    vendor_prefix::VendorPrefix,
+};
 use scraper::{ElementRef, Html, Selector};
 
 use crate::Declaration;
 use crate::paint::read_html_document;
-use crate::parse::{active_declarations_with_path, media_attribute_matches};
+use crate::parse::{active_declarations_with_path, css_length_to_px, media_attribute_matches};
 
 pub fn reason_for_pair(test: &Path, reference: &Path, wpt_dir: &Path) -> Option<String> {
     reason_for_test(test, wpt_dir).or_else(|| reason_for_reference(reference))
@@ -414,8 +426,22 @@ fn strip_css_comments(css: &str) -> String {
 }
 
 fn unsupported_paint_feature(declarations: &[Declaration]) -> Option<&'static str> {
+    if declarations
+        .iter()
+        .filter(|declaration| declaration.property == "background-image")
+        .any(|declaration| !supported_background_image(declaration))
+    {
+        return Some("background-image");
+    }
+
     let features: &[(&str, &[&str])] = &[
-        ("background-image", &["none"]),
+        ("background-position-x", &["0%", "left"]),
+        ("background-position-y", &["0%", "top"]),
+        ("background-size", &["auto", "auto auto"]),
+        ("background-repeat", &["repeat", "repeat repeat"]),
+        ("background-attachment", &["scroll"]),
+        ("background-origin", &["padding-box"]),
+        ("background-clip", &["border-box"]),
         ("border-image", &["none"]),
         ("border-image-source", &["none"]),
         ("transform", &["none"]),
@@ -454,6 +480,108 @@ fn unsupported_paint_feature(declarations: &[Declaration]) -> Option<&'static st
         return Some("sticky positioning");
     }
     None
+}
+
+fn supported_background_image(declaration: &Declaration) -> bool {
+    match declaration.parsed.as_ref() {
+        Some(Property::BackgroundImage(images)) => images.iter().all(|image| match image {
+            Image::None => true,
+            Image::Gradient(gradient) => supported_gradient(gradient),
+            Image::Url(url) => supported_background_url(url.url.as_ref()),
+            Image::ImageSet(_) => false,
+        }),
+        _ => css_value_is_initial(&declaration.value) || declaration.value.trim() == "none",
+    }
+}
+
+fn supported_background_url(url: &str) -> bool {
+    let url = url.trim().to_ascii_lowercase();
+    if url.starts_with("data:") {
+        return url.starts_with("data:image/png;")
+            || url.starts_with("data:image/png,")
+            || url.starts_with("data:image/svg+xml;")
+            || url.starts_with("data:image/svg+xml,");
+    }
+    if url.starts_with("http://") || url.starts_with("https://") || url.starts_with("//") {
+        return false;
+    }
+    let path = url.split(['?', '#']).next().unwrap_or(&url);
+    path.ends_with(".png") || path.ends_with(".svg")
+}
+
+fn supported_gradient(gradient: &Gradient) -> bool {
+    if gradient.get_vendor_prefix() != VendorPrefix::None {
+        return false;
+    }
+    match gradient {
+        Gradient::Linear(gradient) | Gradient::RepeatingLinear(gradient) => supported_length_stops(&gradient.items),
+        Gradient::Radial(gradient) | Gradient::RepeatingRadial(gradient) => supported_radial_gradient(gradient),
+        Gradient::Conic(gradient) | Gradient::RepeatingConic(gradient) => {
+            supported_position(&gradient.position) && supported_angle_stops(&gradient.items)
+        }
+        Gradient::WebKitGradient(_) => false,
+    }
+}
+
+fn supported_radial_gradient(gradient: &RadialGradient) -> bool {
+    let shape_supported = match &gradient.shape {
+        EndingShape::Circle(Circle::Radius(Length::Calc(_))) => false,
+        EndingShape::Circle(Circle::Radius(Length::Value(radius))) => css_length_to_px(radius, 16.0).is_some(),
+        EndingShape::Circle(Circle::Extent(_)) => true,
+        EndingShape::Ellipse(Ellipse::Size { x, y }) => {
+            supported_length_percentage(x) && supported_length_percentage(y)
+        }
+        EndingShape::Ellipse(Ellipse::Extent(_)) => true,
+    };
+    shape_supported && supported_position(&gradient.position) && supported_radial_stops(&gradient.items)
+}
+
+fn supported_length_stops(items: &[GradientItem<LengthPercentage>]) -> bool {
+    supported_stops(items, supported_length_percentage)
+}
+
+fn supported_radial_stops(items: &[GradientItem<LengthPercentage>]) -> bool {
+    supported_stops(items, |position| {
+        supported_length_percentage(position)
+            && match position {
+                DimensionPercentage::Dimension(length) => {
+                    css_length_to_px(length, 16.0).is_some_and(|position| position >= 0.0)
+                }
+                DimensionPercentage::Percentage(percentage) => percentage.0 >= 0.0,
+                DimensionPercentage::Calc(_) => false,
+            }
+    })
+}
+
+fn supported_angle_stops(items: &[GradientItem<AnglePercentage>]) -> bool {
+    supported_stops(items, |position| !matches!(position, DimensionPercentage::Calc(_)))
+}
+
+fn supported_stops<D>(items: &[GradientItem<D>], supported_position: impl Fn(&D) -> bool) -> bool {
+    items.iter().all(|item| match item {
+        GradientItem::ColorStop(stop) => stop.position.as_ref().is_none_or(&supported_position),
+        GradientItem::Hint(_) => false,
+    })
+}
+
+fn supported_position(position: &Position) -> bool {
+    supported_position_component(&position.x) && supported_position_component(&position.y)
+}
+
+fn supported_position_component<S>(position: &PositionComponent<S>) -> bool {
+    match position {
+        PositionComponent::Center => true,
+        PositionComponent::Length(position) => supported_length_percentage(position),
+        PositionComponent::Side { offset, .. } => offset.as_ref().is_none_or(supported_length_percentage),
+    }
+}
+
+fn supported_length_percentage(value: &LengthPercentage) -> bool {
+    match value {
+        DimensionPercentage::Dimension(length) => css_length_to_px(length, 16.0).is_some(),
+        DimensionPercentage::Percentage(_) => true,
+        DimensionPercentage::Calc(_) => false,
+    }
 }
 
 fn property_has_non_initial_value(declarations: &[Declaration], property: &str, initial_values: &[&str]) -> bool {

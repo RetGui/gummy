@@ -944,6 +944,20 @@ fn apply_typed_property(
             render_style.direction,
         ),
         Property::BackgroundColor(value) => render_style.background = resolve_css_color(value, render_style.color),
+        Property::BackgroundImage(images) => {
+            render_style.background_images = images
+                .iter()
+                .filter_map(|image| match image {
+                    lightningcss::values::image::Image::Gradient(gradient) => {
+                        Some(crate::BackgroundImage::Gradient((**gradient).clone()))
+                    }
+                    lightningcss::values::image::Image::Url(url) => {
+                        Some(crate::BackgroundImage::Url(url.url.to_string()))
+                    }
+                    lightningcss::values::image::Image::None | lightningcss::values::image::Image::ImageSet(_) => None,
+                })
+                .collect();
+        }
         Property::Color(value) => {
             if let Some(value) = resolve_css_color(value, render_style.color) {
                 render_style.color = value;

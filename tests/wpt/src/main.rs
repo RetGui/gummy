@@ -64,6 +64,7 @@ const WPT_REPOSITORY: &str = "https://github.com/web-platform-tests/wpt.git";
 #[derive(Clone, Debug)]
 pub struct RenderStyle {
     background: Option<Color>,
+    background_images: Vec<BackgroundImage>,
     border_color: Rect<Color>,
     border_visible: Rect<bool>,
     color: Color,
@@ -80,10 +81,17 @@ pub struct RenderStyle {
     writing_mode: WritingMode,
 }
 
+#[derive(Clone, Debug)]
+pub enum BackgroundImage {
+    Gradient(lightningcss::values::gradient::Gradient),
+    Url(String),
+}
+
 impl Default for RenderStyle {
     fn default() -> Self {
         Self {
             background: None,
+            background_images: Vec::new(),
             border_color: Rect { left: Color::BLACK, right: Color::BLACK, top: Color::BLACK, bottom: Color::BLACK },
             border_visible: Rect { left: false, right: false, top: false, bottom: false },
             color: Color::BLACK,
