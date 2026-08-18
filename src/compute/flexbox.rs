@@ -1,21 +1,23 @@
 //! Computes the [flexbox](https://css-tricks.com/snippets/css/a-guide-to-flexbox/) layout algorithm on [`GummyTree`](crate::GummyTree) according to the [spec](https://www.w3.org/TR/css-flexbox-1/)
-use crate::compute::common::alignment::{compute_alignment_offset, resolve_self_alignment_safety};
+use crate::compute::common::alignment::{
+    compute_align_content_offset, compute_justify_content_offset, resolve_align_self_safety,
+};
 use crate::geometry::{Line, Point, Rect, Size};
 use crate::style::{
-    AlignContent, AlignContentKeyword, AlignItems, AlignItemsKeyword, AlignSelf, AvailableSpace, FlexWrap,
-    JustifyContent, LengthPercentageAuto, Overflow, Position,
+    AlignContent, AlignItems, AlignSelf, AvailableSpace, FlexWrap, JustifyContent, LengthPercentageAuto, Overflow,
+    Position,
 };
 use crate::style::{CoreStyle, FlexDirection, FlexboxContainerStyle, FlexboxItemStyle};
 use crate::style_helpers::{GummyMaxContent, GummyMinContent};
 use crate::tree::{Layout, LayoutInput, LayoutOutput, RunMode, SizingMode};
 use crate::tree::{LayoutFlexboxContainer, LayoutPartialTreeExt, NodeId};
-use crate::util::debug::debug_log;
-use crate::util::sys::{f32_max, new_vec_with_capacity, Vec};
 use crate::util::MaybeMath;
+use crate::util::debug::debug_log;
+use crate::util::sys::{Vec, f32_max, new_vec_with_capacity};
 use crate::util::{MaybeResolve, ResolveOrZero};
 use crate::{BoxGenerationMode, BoxSizing, Direction, RequestedAxis};
 
-use super::common::alignment::apply_alignment_fallback;
+use super::common::alignment::{apply_align_content_fallback, apply_justify_content_fallback};
 #[cfg(feature = "content_size")]
 use super::common::content_size::compute_content_size_contribution;
 
@@ -154,7 +156,7 @@ struct AlgoConstants {
     /// The align_content property of this node
     align_content: AlignContent,
     /// The justify_content property of this node
-    justify_content: Option<JustifyContent>,
+    justify_content: JustifyContent,
 
     /// The border-box size of the node being laid out (if known)
     node_outer_size: Size<Option<f32>>,
@@ -165,6 +167,43 @@ struct AlgoConstants {
     container_size: Size<f32>,
     /// The size of the internal container
     inner_container_size: Size<f32>,
+}
+
+#[inline]
+/// Resolves the flexbox-specific `normal` value for `align-items`.
+fn resolve_flex_align_items(align_items: AlignItems) -> AlignItems {
+    match align_items {
+        AlignItems::Normal => AlignItems::STRETCH,
+        _ => align_items,
+    }
+}
+
+#[inline]
+/// Resolves `auto` inheritance and the flexbox-specific `normal` value for `align-self`.
+fn resolve_flex_align_self(align_self: AlignSelf, align_items: AlignItems) -> AlignSelf {
+    match align_self {
+        AlignSelf::Auto => align_items.into(),
+        AlignSelf::Normal => AlignSelf::STRETCH,
+        _ => align_self,
+    }
+}
+
+#[inline]
+/// Resolves the flexbox-specific `normal` value for `align-content`.
+fn resolve_flex_align_content(align_content: AlignContent) -> AlignContent {
+    match align_content {
+        AlignContent::Normal => AlignContent::STRETCH,
+        _ => align_content,
+    }
+}
+
+#[inline]
+/// Resolves the flexbox-specific `normal` value for `justify-content`.
+fn resolve_flex_justify_content(justify_content: JustifyContent) -> JustifyContent {
+    match justify_content {
+        JustifyContent::Normal => JustifyContent::FLEX_START,
+        _ => justify_content,
+    }
 }
 
 /// Computes the layout of a box according to the flexbox algorithm
@@ -472,9 +511,9 @@ fn compute_constants(
     let box_sizing_adjustment =
         if style.box_sizing() == BoxSizing::ContentBox { padding_border_sum } else { Size::ZERO };
 
-    let align_items = style.align_items().unwrap_or(AlignItems::STRETCH);
-    let align_content = style.align_content().unwrap_or(AlignContent::STRETCH);
-    let justify_content = style.justify_content();
+    let align_items = resolve_flex_align_items(style.align_items());
+    let align_content = resolve_flex_align_content(style.align_content());
+    let justify_content = resolve_flex_justify_content(style.justify_content());
     let layout_direction = style.direction();
 
     // Scrollbar gutters are reserved when the `overflow` property is set to `Overflow::Scroll`.
@@ -600,11 +639,8 @@ fn generate_anonymous_flex_items(
             border: flex_item_style
                 .border()
                 .resolve_or_zero(constants.node_inner_size.width, |val, basis| tree.calc(val, basis)),
-            align_self: flex_item_style.align_self().unwrap_or(constants.align_items).resolve_self_relative(
-                flex_item_style.direction(),
-                constants.layout_direction,
-                constants.is_column,
-            ),
+            align_self: resolve_flex_align_self(flex_item_style.align_self(), constants.align_items)
+                .resolve_self_relative(flex_item_style.direction(), constants.layout_direction, constants.is_column),
             overflow: flex_item_style.overflow(),
             scrollbar_width: flex_item_style.scrollbar_width(),
             flex_grow: flex_item_style.flex_grow(),
@@ -1778,12 +1814,18 @@ fn distribute_remaining_free_space(flex_lines: &mut [FlexLine], constants: &Algo
         let num_items = line.items.len();
         let layout_reverse = constants.dir.is_reverse();
         let gap = constants.gap.main(constants.dir);
-        let raw_justify_content_mode = constants.justify_content.unwrap_or(JustifyContent::FLEX_START);
-        let justify_content_mode = apply_alignment_fallback(free_space, num_items, raw_justify_content_mode);
+        let raw_justify_content_mode = constants.justify_content;
+        let justify_content_mode = apply_justify_content_fallback(free_space, num_items, raw_justify_content_mode);
 
         let justify_item = |(i, child): (usize, &mut FlexItem)| {
-            child.offset_main =
-                compute_alignment_offset(free_space, num_items, gap, justify_content_mode, layout_reverse, i == 0);
+            child.offset_main = compute_justify_content_offset(
+                free_space,
+                num_items,
+                gap,
+                justify_content_mode,
+                layout_reverse,
+                i == 0,
+            );
         };
 
         if layout_reverse {
@@ -1874,44 +1916,40 @@ fn align_flex_items_along_cross_axis(
     // If align-self uses a "safe" overflow-position keyword and the item would overflow its
     // line cross size, fall back to logical Start to avoid data loss. See CSS Box Alignment 3
     // §4.3 <https://www.w3.org/TR/css-align-3/#overflow-values>. Otherwise, drop the safety
-    // field so the match below operates on a bare keyword and stays exhaustive.
-    let align_keyword = if child.align_self.is_safe() && free_space < 0.0 {
-        AlignItemsKeyword::Start
-    } else {
-        child.align_self.keyword
-    };
+    // modifier.
+    let alignment = resolve_align_self_safety(child.align_self, free_space < 0.0);
 
-    match align_keyword {
-        AlignItemsKeyword::Start => {
+    match alignment {
+        AlignSelf::Start => {
             if cross_axis_should_reverse {
                 free_space
             } else {
                 0.0
             }
         }
-        AlignItemsKeyword::FlexStart => {
+        AlignSelf::FlexStart => {
             if constants.is_wrap_reverse ^ cross_axis_should_reverse {
                 free_space
             } else {
                 0.0
             }
         }
-        AlignItemsKeyword::End => {
+        AlignSelf::End => {
             if cross_axis_should_reverse {
                 0.0
             } else {
                 free_space
             }
         }
-        AlignItemsKeyword::FlexEnd => {
+        AlignSelf::FlexEnd => {
             if constants.is_wrap_reverse ^ cross_axis_should_reverse {
                 0.0
             } else {
                 free_space
             }
         }
-        AlignItemsKeyword::Center => free_space / 2.0,
-        AlignItemsKeyword::Baseline => {
+        AlignSelf::Center => free_space / 2.0,
+        AlignSelf::Baseline => {
             if constants.is_row {
                 if constants.is_wrap_reverse {
                     // In a wrap-reverse container the cross axis is flipped, so the baseline-aligned
@@ -1932,7 +1970,7 @@ fn align_flex_items_along_cross_axis(
                 }
             }
         }
-        AlignItemsKeyword::Stretch => {
+        AlignSelf::Stretch => {
             if constants.is_wrap_reverse ^ cross_axis_should_reverse {
                 free_space
             } else {
@@ -1941,7 +1979,16 @@ fn align_flex_items_along_cross_axis(
         }
         // SelfStart/SelfEnd are resolved to Start/End against the item's own direction when
         // flex items are generated.
-        AlignItemsKeyword::SelfStart | AlignItemsKeyword::SelfEnd => unreachable!(),
+        AlignSelf::SelfStart | AlignSelf::SelfEnd | AlignSelf::SafeSelfStart | AlignSelf::SafeSelfEnd => unreachable!(),
+        AlignSelf::Normal
+        | AlignSelf::Auto
+        | AlignSelf::SafeStart
+        | AlignSelf::SafeEnd
+        | AlignSelf::SafeFlexStart
+        | AlignSelf::SafeFlexEnd
+        | AlignSelf::SafeCenter => {
+            unreachable!("alignment sentinels are resolved before flex item alignment")
+        }
     }
 }
 
@@ -1993,11 +2040,17 @@ fn align_flex_lines_per_align_content(flex_lines: &mut [FlexLine], constants: &A
     let total_cross_axis_gap = sum_axis_gaps(gap, num_lines);
     let free_space = constants.inner_container_size.cross(constants.dir) - total_cross_size - total_cross_axis_gap;
 
-    let align_content_mode = apply_alignment_fallback(free_space, num_lines, constants.align_content);
+    let align_content_mode = apply_align_content_fallback(free_space, num_lines, constants.align_content);
 
     let align_line = |(i, line): (usize, &mut FlexLine)| {
-        line.offset_cross =
-            compute_alignment_offset(free_space, num_lines, gap, align_content_mode, constants.is_wrap_reverse, i == 0);
+        line.offset_cross = compute_align_content_offset(
+            free_space,
+            num_lines,
+            gap,
+            align_content_mode,
+            constants.is_wrap_reverse,
+            i == 0,
+        );
     };
 
     if constants.is_wrap_reverse {
@@ -2290,11 +2343,8 @@ fn perform_absolute_layout_on_absolute_children(
         let overflow = child_style.overflow();
         let scrollbar_width = child_style.scrollbar_width();
         let aspect_ratio = child_style.aspect_ratio();
-        let align_self = child_style.align_self().unwrap_or(constants.align_items).resolve_self_relative(
-            child_style.direction(),
-            constants.layout_direction,
-            constants.is_column,
-        );
+        let align_self = resolve_flex_align_self(child_style.align_self(), constants.align_items)
+            .resolve_self_relative(child_style.direction(), constants.layout_direction, constants.is_column);
         let margin = child_style
             .margin()
             .map(|margin| margin.resolve_to_option(inset_relative_size.width, |val, basis| tree.calc(val, basis)));
@@ -2472,22 +2522,20 @@ fn perform_absolute_layout_on_absolute_children(
             // `start`/`end` are writing-mode relative (they flip for RTL but not for
             // reversed flex-directions), whereas `flex-start`/`flex-end` and the
             // distributed keywords' fallbacks are flex-relative.
-            let start_position = match constants.justify_content.unwrap_or(JustifyContent::FLEX_START).keyword() {
-                AlignContentKeyword::Start => !main_is_rtl,
-                AlignContentKeyword::End => main_is_rtl,
+            let justify_content = constants.justify_content.unsafe_variant();
+            let start_position = match justify_content {
+                JustifyContent::Start => !main_is_rtl,
+                JustifyContent::End => main_is_rtl,
                 _ => true,
             };
-            match (
-                constants.justify_content.unwrap_or(JustifyContent::FLEX_START).keyword(),
-                main_axis_flex_start_reversed,
-            ) {
-                (AlignContentKeyword::SpaceBetween, false)
-                | (AlignContentKeyword::Stretch, false)
-                | (AlignContentKeyword::FlexStart, false)
-                | (AlignContentKeyword::FlexEnd, true) => {
+            match (justify_content, main_axis_flex_start_reversed) {
+                (JustifyContent::SpaceBetween, false)
+                | (JustifyContent::Stretch, false)
+                | (JustifyContent::FlexStart, false)
+                | (JustifyContent::FlexEnd, true) => {
                     constants.content_box_inset.main_start(constants.dir) + resolved_margin.main_start(constants.dir)
                 }
-                (AlignContentKeyword::Start | AlignContentKeyword::End, _) => {
+                (JustifyContent::Start | JustifyContent::End, _) => {
                     if start_position {
                         constants.content_box_inset.main_start(constants.dir)
                             + resolved_margin.main_start(constants.dir)
@@ -2498,18 +2546,16 @@ fn perform_absolute_layout_on_absolute_children(
                             - resolved_margin.main_end(constants.dir)
                     }
                 }
-                (AlignContentKeyword::FlexEnd, false)
-                | (AlignContentKeyword::FlexStart, true)
-                | (AlignContentKeyword::Stretch, true)
-                | (AlignContentKeyword::SpaceBetween, true) => {
+                (JustifyContent::FlexEnd, false)
+                | (JustifyContent::FlexStart, true)
+                | (JustifyContent::Stretch, true)
+                | (JustifyContent::SpaceBetween, true) => {
                     constants.container_size.main(constants.dir)
                         - constants.content_box_inset.main_end(constants.dir)
                         - final_size.main(constants.dir)
                         - resolved_margin.main_end(constants.dir)
                 }
-                (AlignContentKeyword::SpaceEvenly, _)
-                | (AlignContentKeyword::SpaceAround, _)
-                | (AlignContentKeyword::Center, _) => {
+                (JustifyContent::SpaceEvenly, _) | (JustifyContent::SpaceAround, _) | (JustifyContent::Center, _) => {
                     (constants.container_size.main(constants.dir)
                         + constants.content_box_inset.main_start(constants.dir)
                         - constants.content_box_inset.main_end(constants.dir)
@@ -2517,6 +2563,14 @@ fn perform_absolute_layout_on_absolute_children(
                         + resolved_margin.main_start(constants.dir)
                         - resolved_margin.main_end(constants.dir))
                         / 2.0
+                }
+                (JustifyContent::Normal, _)
+                | (JustifyContent::SafeStart, _)
+                | (JustifyContent::SafeEnd, _)
+                | (JustifyContent::SafeFlexStart, _)
+                | (JustifyContent::SafeFlexEnd, _)
+                | (JustifyContent::SafeCenter, _) => {
+                    unreachable!("justify-content: normal is resolved before flex layout")
                 }
             }
         };
@@ -2547,21 +2601,21 @@ fn perform_absolute_layout_on_absolute_children(
         } else {
             let cross_overflows = final_size.cross(constants.dir) + resolved_margin.cross_axis_sum(constants.dir)
                 > constants.container_size.cross(constants.dir)
-                - constants.content_box_inset.cross_axis_sum(constants.dir);
-            let cross_keyword = resolve_self_alignment_safety(align_self, cross_overflows);
+                    - constants.content_box_inset.cross_axis_sum(constants.dir);
+            let cross_alignment = resolve_align_self_safety(align_self, cross_overflows);
             // `start`/`end` (and `baseline`, whose static-position fallback is `start`) are
             // writing-mode relative: they flip for RTL but not for `wrap-reverse`.
             // `flex-start`/`flex-end` and the `stretch` fallback are flex-relative.
-            let start_position = match cross_keyword {
-                AlignItemsKeyword::Start | AlignItemsKeyword::Baseline => !cross_is_rtl,
-                AlignItemsKeyword::End => cross_is_rtl,
+            let start_position = match cross_alignment {
+                AlignSelf::Start | AlignSelf::Baseline => !cross_is_rtl,
+                AlignSelf::End => cross_is_rtl,
                 _ => true,
             };
-            match (cross_keyword, cross_axis_flex_start_reversed) {
+            match (cross_alignment, cross_axis_flex_start_reversed) {
                 // Stretch alignment does not apply to absolutely positioned items
                 // See "Example 3" at https://www.w3.org/TR/css-flexbox-1/#abspos-items
                 // Note: Stretch should be FlexStart not Start when we support both
-                (AlignItemsKeyword::Start | AlignItemsKeyword::End | AlignItemsKeyword::Baseline, _) => {
+                (AlignSelf::Start | AlignSelf::End | AlignSelf::Baseline, _) => {
                     if start_position {
                         constants.content_box_inset.cross_start(constants.dir)
                             + resolved_margin.cross_start(constants.dir)
@@ -2572,18 +2626,16 @@ fn perform_absolute_layout_on_absolute_children(
                             - resolved_margin.cross_end(constants.dir)
                     }
                 }
-                (AlignItemsKeyword::Stretch | AlignItemsKeyword::FlexStart, false)
-                | (AlignItemsKeyword::FlexEnd, true) => {
+                (AlignSelf::Stretch | AlignSelf::FlexStart, false) | (AlignSelf::FlexEnd, true) => {
                     constants.content_box_inset.cross_start(constants.dir) + resolved_margin.cross_start(constants.dir)
                 }
-                (AlignItemsKeyword::Stretch | AlignItemsKeyword::FlexStart, true)
-                | (AlignItemsKeyword::FlexEnd, false) => {
+                (AlignSelf::Stretch | AlignSelf::FlexStart, true) | (AlignSelf::FlexEnd, false) => {
                     constants.container_size.cross(constants.dir)
                         - constants.content_box_inset.cross_end(constants.dir)
                         - final_size.cross(constants.dir)
                         - resolved_margin.cross_end(constants.dir)
                 }
-                (AlignItemsKeyword::Center, _) => {
+                (AlignSelf::Center, _) => {
                     (constants.container_size.cross(constants.dir)
                         + constants.content_box_inset.cross_start(constants.dir)
                         - constants.content_box_inset.cross_end(constants.dir)
@@ -2594,7 +2646,21 @@ fn perform_absolute_layout_on_absolute_children(
                 }
                 // SelfStart/SelfEnd are resolved to Start/End against the item's own direction
                 // where `align_self` is read above.
-                (AlignItemsKeyword::SelfStart | AlignItemsKeyword::SelfEnd, _) => unreachable!(),
+                (AlignSelf::SelfStart | AlignSelf::SelfEnd | AlignSelf::SafeSelfStart | AlignSelf::SafeSelfEnd, _) => {
+                    unreachable!()
+                }
+                (
+                    AlignSelf::Normal
+                    | AlignSelf::Auto
+                    | AlignSelf::SafeStart
+                    | AlignSelf::SafeEnd
+                    | AlignSelf::SafeFlexStart
+                    | AlignSelf::SafeFlexEnd
+                    | AlignSelf::SafeCenter,
+                    _,
+                ) => {
+                    unreachable!("alignment is resolved before absolute flex item alignment")
+                }
             }
         };
 

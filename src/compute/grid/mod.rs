@@ -1,30 +1,31 @@
 //! This module is a partial implementation of the CSS Grid Level 1 specification
 //! <https://www.w3.org/TR/css-grid-1>
-use crate::geometry::{AbsoluteAxis, AbstractAxis, InBothAbsAxis};
+use crate::geometry::{AbsoluteAxis, AbstractAxis};
 use crate::geometry::{Line, Point, Rect, Size};
-use crate::style::{AlignItems, AlignSelf, AvailableSpace, Overflow, Position};
+use crate::style::{AlignItems, AlignSelf, AvailableSpace, JustifyContent, JustifyItems, Overflow, Position};
 use crate::tree::{Layout, LayoutInput, LayoutOutput, LayoutPartialTreeExt, NodeId, RunMode, SizingMode};
-use crate::util::debug::debug_log;
-use crate::util::sys::{f32_max, f32_min, GridTrackVec, Vec};
 use crate::util::MaybeMath;
+use crate::util::debug::debug_log;
+use crate::util::sys::{GridTrackVec, Vec, f32_max, f32_min};
 use crate::util::{MaybeResolve, ResolveOrZero};
 use crate::{
-    style_helpers::*, AlignContent, BoxGenerationMode, BoxSizing, CoreStyle, Direction, GridContainerStyle,
-    GridItemStyle, JustifyContent, LayoutGridContainer, RequestedAxis,
+    AlignContent, BoxGenerationMode, BoxSizing, CoreStyle, Direction, GridContainerStyle, GridItemStyle,
+    LayoutGridContainer, RequestedAxis, style_helpers::*,
 };
-use alignment::{align_and_position_item, align_tracks};
-use explicit_grid::{compute_explicit_grid_size_in_axis, initialize_grid_tracks, AutoRepeatStrategy};
+use alignment::{GridContainerAlignmentStyles, align_and_position_item, align_tracks, justify_tracks};
+use explicit_grid::{AutoRepeatStrategy, compute_explicit_grid_size_in_axis, initialize_grid_tracks};
 use implicit_grid::compute_grid_size_estimate;
 use placement::place_grid_items;
 use track_sizing::{
-    determine_if_item_crosses_flexible_or_intrinsic_tracks, resolve_item_track_indexes, track_sizing_algorithm,
+    align_content_gutter_weights, determine_if_item_crosses_flexible_or_intrinsic_tracks,
+    justify_content_gutter_weights, resolve_item_track_indexes, track_sizing_algorithm,
 };
 use types::{CellOccupancyMatrix, GridTrack, NamedLineResolver, TrackCounts};
 
 #[cfg(feature = "detailed_layout_info")]
 use types::{GridItem, GridTrackKind};
 
-pub(crate) use types::{GridCoordinate, GridLine, OriginZeroLine, MAX_GRID_TRACKS};
+pub(crate) use types::{GridCoordinate, GridLine, MAX_GRID_TRACKS, OriginZeroLine};
 
 mod alignment;
 mod explicit_grid;
@@ -33,6 +34,42 @@ mod placement;
 mod track_sizing;
 mod types;
 mod util;
+
+#[inline]
+/// Resolves the grid-specific `normal` value for `align-content`.
+fn resolve_grid_align_content(alignment: AlignContent) -> AlignContent {
+    match alignment {
+        AlignContent::Normal => AlignContent::STRETCH,
+        _ => alignment,
+    }
+}
+
+#[inline]
+/// Resolves the grid-specific `normal` value for `justify-content`.
+fn resolve_grid_justify_content(alignment: JustifyContent) -> JustifyContent {
+    match alignment {
+        JustifyContent::Normal => JustifyContent::STRETCH,
+        _ => alignment,
+    }
+}
+
+#[inline]
+/// Resolves the grid-specific `normal` value for `align-items`.
+fn resolve_grid_align_items(alignment: AlignItems) -> AlignItems {
+    match alignment {
+        AlignItems::Normal => AlignItems::STRETCH,
+        _ => alignment,
+    }
+}
+
+#[inline]
+/// Resolves the grid-specific `normal` value for `justify-items`.
+fn resolve_grid_justify_items(alignment: JustifyItems) -> JustifyItems {
+    match alignment {
+        JustifyItems::Normal => JustifyItems::STRETCH,
+        _ => alignment,
+    }
+}
 
 /// Grid layout algorithm
 /// This consists of a few phases:
@@ -95,8 +132,8 @@ pub fn compute_grid_layout<Tree: LayoutGridContainer>(
         Direction::Rtl => content_box_inset.left += scrollbar_gutter.x,
     };
 
-    let align_content = style.align_content().unwrap_or(AlignContent::STRETCH);
-    let justify_content = style.justify_content().unwrap_or(JustifyContent::STRETCH);
+    let align_content = resolve_grid_align_content(style.align_content());
+    let justify_content = resolve_grid_justify_content(style.justify_content());
     let align_items = style.align_items();
     let justify_items = style.justify_items();
 
@@ -237,8 +274,8 @@ pub fn compute_grid_layout<Tree: LayoutGridContainer>(
         in_flow_children_iter,
         direction,
         style.grid_auto_flow(),
-        align_items.unwrap_or(AlignItems::STRETCH),
-        justify_items.unwrap_or(AlignItems::STRETCH),
+        resolve_grid_align_items(align_items),
+        resolve_grid_justify_items(justify_items),
         &name_resolver,
     );
 
@@ -308,8 +345,8 @@ pub fn compute_grid_layout<Tree: LayoutGridContainer>(
         AbstractAxis::Inline,
         inner_min_size.get(AbstractAxis::Inline),
         inner_max_size.get(AbstractAxis::Inline),
-        justify_content,
-        align_content,
+        justify_content == JustifyContent::STRETCH,
+        align_content_gutter_weights(align_content),
         available_grid_space,
         inner_node_size,
         &mut columns,
@@ -331,8 +368,8 @@ pub fn compute_grid_layout<Tree: LayoutGridContainer>(
         AbstractAxis::Block,
         inner_min_size.get(AbstractAxis::Block),
         inner_max_size.get(AbstractAxis::Block),
-        align_content,
-        justify_content,
+        align_content == AlignContent::STRETCH,
+        justify_content_gutter_weights(justify_content),
         available_grid_space,
         inner_node_size,
         &mut rows,
@@ -455,8 +492,8 @@ pub fn compute_grid_layout<Tree: LayoutGridContainer>(
             AbstractAxis::Inline,
             inner_min_size.get(AbstractAxis::Inline),
             inner_max_size.get(AbstractAxis::Inline),
-            justify_content,
-            align_content,
+            justify_content == JustifyContent::STRETCH,
+            align_content_gutter_weights(align_content),
             available_grid_space,
             inner_node_size,
             &mut columns,
@@ -517,8 +554,8 @@ pub fn compute_grid_layout<Tree: LayoutGridContainer>(
                 AbstractAxis::Block,
                 inner_min_size.get(AbstractAxis::Block),
                 inner_max_size.get(AbstractAxis::Block),
-                align_content,
-                justify_content,
+                align_content == AlignContent::STRETCH,
+                justify_content_gutter_weights(justify_content),
                 available_grid_space,
                 inner_node_size,
                 &mut rows,
@@ -567,7 +604,7 @@ pub fn compute_grid_layout<Tree: LayoutGridContainer>(
     // Align columns
     let inline_size_without_scrollbar = f32_max(container_border_box.width - padding_border_size.width, 0.0);
     let inline_scrollbar_gutter_for_alignment = f32_min(scrollbar_gutter.x, inline_size_without_scrollbar);
-    align_tracks(
+    justify_tracks(
         container_content_box.get(AbstractAxis::Inline),
         Line {
             start: padding.left + if direction.is_rtl() { inline_scrollbar_gutter_for_alignment } else { 0.0 },
@@ -598,7 +635,7 @@ pub fn compute_grid_layout<Tree: LayoutGridContainer>(
     // Sort items back into original order to allow them to be matched up with styles
     items.sort_by_key(|item| item.source_order);
 
-    let container_alignment_styles = InBothAbsAxis { horizontal: justify_items, vertical: align_items };
+    let container_alignment_styles = GridContainerAlignmentStyles { justify_items, align_items };
 
     // Position in-flow children (stored in items vector)
     for (index, item) in items.iter_mut().enumerate() {

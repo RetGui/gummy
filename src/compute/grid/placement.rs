@@ -4,7 +4,7 @@ use super::types::{CellOccupancyMatrix, CellOccupancyState, GridItem};
 use super::{NamedLineResolver, OriginZeroLine};
 use crate::geometry::Line;
 use crate::geometry::{AbsoluteAxis, InBothAbsAxis};
-use crate::style::{AlignItems, GridAutoFlow, OriginZeroGridPlacement};
+use crate::style::{AlignItems, GridAutoFlow, JustifyItems, OriginZeroGridPlacement};
 use crate::tree::NodeId;
 use crate::util::sys::Vec;
 use crate::{CoreStyle, Direction, GridItemStyle};
@@ -86,7 +86,7 @@ pub(super) fn place_grid_items<'a, S, ChildIter>(
     direction: Direction,
     grid_auto_flow: GridAutoFlow,
     align_items: AlignItems,
-    justify_items: AlignItems,
+    justify_items: JustifyItems,
     named_line_resolver: &NamedLineResolver<<S as CoreStyle>::CustomIdent>,
 ) where
     S: GridItemStyle + 'a,
@@ -464,7 +464,7 @@ fn record_grid_placement<S: GridItemStyle>(
     index: usize,
     style: S,
     parent_align_items: AlignItems,
-    parent_justify_items: AlignItems,
+    parent_justify_items: JustifyItems,
     primary_axis: AbsoluteAxis,
     primary_span: Line<OriginZeroLine>,
     secondary_span: Line<OriginZeroLine>,
@@ -505,14 +505,14 @@ fn record_grid_placement<S: GridItemStyle>(
 mod tests {
 
     mod test_placement_algorithm {
+        use crate::Direction;
+        use crate::compute::grid::CellOccupancyMatrix;
+        use crate::compute::grid::NamedLineResolver;
         use crate::compute::grid::implicit_grid::compute_grid_size_estimate;
         use crate::compute::grid::types::TrackCounts;
         use crate::compute::grid::util::*;
-        use crate::compute::grid::CellOccupancyMatrix;
-        use crate::compute::grid::NamedLineResolver;
         use crate::prelude::*;
         use crate::style::GridAutoFlow;
-        use crate::Direction;
 
         use super::super::place_grid_items;
 
@@ -545,8 +545,8 @@ mod tests {
                 children_iter,
                 Direction::Ltr,
                 flow,
-                AlignSelf::START,
-                AlignSelf::START,
+                AlignItems::START,
+                JustifyItems::START,
                 // TODO: actually test named line resolution
                 &name_resolver,
             );

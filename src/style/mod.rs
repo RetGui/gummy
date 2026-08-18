@@ -13,10 +13,7 @@ mod float;
 #[cfg(feature = "grid")]
 mod grid;
 
-pub use self::alignment::{
-    AlignContent, AlignContentKeyword, AlignItems, AlignItemsKeyword, AlignSelf, AlignmentSafety, JustifyContent,
-    JustifyItems, JustifySelf,
-};
+pub use self::alignment::{AlignContent, AlignItems, AlignSelf, JustifyContent, JustifyItems, JustifySelf};
 pub use self::available_space::AvailableSpace;
 pub use self::compact_length::CompactLength;
 pub use self::dimension::{Dimension, LengthPercentage, LengthPercentageAuto};
@@ -501,24 +498,30 @@ pub struct Style<S: CheapCloneStr = DefaultCheapStr> {
     // Alignment properties
     /// How this node's children aligned in the cross/block axis?
     #[cfg(any(feature = "flexbox", feature = "grid"))]
-    pub align_items: Option<AlignItems>,
+    #[cfg_attr(feature = "serde", serde(deserialize_with = "alignment::deserialize_align_items_or_normal"))]
+    pub align_items: AlignItems,
     /// How this node should be aligned in the cross/block axis
-    /// Falls back to the parents [`AlignItems`] if not set
+    /// [`AlignSelf::AUTO`] falls back to the parent's [`AlignItems`]
     #[cfg(any(feature = "flexbox", feature = "grid"))]
-    pub align_self: Option<AlignSelf>,
+    #[cfg_attr(feature = "serde", serde(deserialize_with = "alignment::deserialize_align_self_or_auto"))]
+    pub align_self: AlignSelf,
     /// How this node's children should be aligned in the inline axis
     #[cfg(feature = "grid")]
-    pub justify_items: Option<AlignItems>,
+    #[cfg_attr(feature = "serde", serde(deserialize_with = "alignment::deserialize_justify_items_or_normal"))]
+    pub justify_items: JustifyItems,
     /// How this node should be aligned in the inline axis
-    /// Falls back to the parents [`JustifyItems`] if not set
+    /// [`JustifySelf::AUTO`] falls back to the parent's [`JustifyItems`]
     #[cfg(feature = "grid")]
-    pub justify_self: Option<AlignSelf>,
+    #[cfg_attr(feature = "serde", serde(deserialize_with = "alignment::deserialize_justify_self_or_auto"))]
+    pub justify_self: JustifySelf,
     /// How should content contained within this item be aligned in the cross/block axis
     #[cfg(any(feature = "flexbox", feature = "grid", feature = "block_layout"))]
-    pub align_content: Option<AlignContent>,
+    #[cfg_attr(feature = "serde", serde(deserialize_with = "alignment::deserialize_align_content_or_normal"))]
+    pub align_content: AlignContent,
     /// How should content contained within this item be aligned in the main/inline axis
     #[cfg(any(feature = "flexbox", feature = "grid"))]
-    pub justify_content: Option<JustifyContent>,
+    #[cfg_attr(feature = "serde", serde(deserialize_with = "alignment::deserialize_justify_content_or_normal"))]
+    pub justify_content: JustifyContent,
     /// How large should the gaps between items in a grid or flex container be?
     #[cfg(any(feature = "flexbox", feature = "grid"))]
     #[cfg_attr(feature = "serde", serde(default = "style_helpers::zero"))]
@@ -624,17 +627,17 @@ impl<S: CheapCloneStr> Style<S> {
         gap: Size::zero(),
         // Alignment
         #[cfg(any(feature = "flexbox", feature = "grid"))]
-        align_items: None,
+        align_items: AlignItems::NORMAL,
         #[cfg(any(feature = "flexbox", feature = "grid"))]
-        align_self: None,
+        align_self: AlignSelf::AUTO,
         #[cfg(feature = "grid")]
-        justify_items: None,
+        justify_items: JustifyItems::NORMAL,
         #[cfg(feature = "grid")]
-        justify_self: None,
+        justify_self: JustifySelf::AUTO,
         #[cfg(any(feature = "flexbox", feature = "grid", feature = "block_layout"))]
-        align_content: None,
+        align_content: AlignContent::NORMAL,
         #[cfg(any(feature = "flexbox", feature = "grid"))]
-        justify_content: None,
+        justify_content: JustifyContent::NORMAL,
         // Block
         #[cfg(feature = "block_layout")]
         text_align: TextAlign::Auto,
@@ -840,7 +843,7 @@ impl<S: CheapCloneStr> BlockContainerStyle for Style<S> {
     }
 
     #[inline(always)]
-    fn align_content(&self) -> Option<AlignContent> {
+    fn align_content(&self) -> AlignContent {
         self.align_content
     }
 }
@@ -853,7 +856,7 @@ impl<T: BlockContainerStyle> BlockContainerStyle for &'_ T {
     }
 
     #[inline(always)]
-    fn align_content(&self) -> Option<AlignContent> {
+    fn align_content(&self) -> AlignContent {
         (*self).align_content()
     }
 }
@@ -913,15 +916,15 @@ impl<S: CheapCloneStr> FlexboxContainerStyle for Style<S> {
         self.gap
     }
     #[inline(always)]
-    fn align_content(&self) -> Option<AlignContent> {
+    fn align_content(&self) -> AlignContent {
         self.align_content
     }
     #[inline(always)]
-    fn align_items(&self) -> Option<AlignItems> {
+    fn align_items(&self) -> AlignItems {
         self.align_items
     }
     #[inline(always)]
-    fn justify_content(&self) -> Option<JustifyContent> {
+    fn justify_content(&self) -> JustifyContent {
         self.justify_content
     }
 }
@@ -941,15 +944,15 @@ impl<T: FlexboxContainerStyle> FlexboxContainerStyle for &'_ T {
         (*self).gap()
     }
     #[inline(always)]
-    fn align_content(&self) -> Option<AlignContent> {
+    fn align_content(&self) -> AlignContent {
         (*self).align_content()
     }
     #[inline(always)]
-    fn align_items(&self) -> Option<AlignItems> {
+    fn align_items(&self) -> AlignItems {
         (*self).align_items()
     }
     #[inline(always)]
-    fn justify_content(&self) -> Option<JustifyContent> {
+    fn justify_content(&self) -> JustifyContent {
         (*self).justify_content()
     }
 }
@@ -969,7 +972,7 @@ impl<S: CheapCloneStr> FlexboxItemStyle for Style<S> {
         self.flex_shrink
     }
     #[inline(always)]
-    fn align_self(&self) -> Option<AlignSelf> {
+    fn align_self(&self) -> AlignSelf {
         self.align_self
     }
     #[inline(always)]
@@ -993,11 +996,13 @@ impl<T: FlexboxItemStyle> FlexboxItemStyle for &'_ T {
         (*self).flex_shrink()
     }
     #[inline(always)]
-    fn align_self(&self) -> Option<AlignSelf> {
+    fn align_self(&self) -> AlignSelf {
         (*self).align_self()
     }
     #[inline(always)]
-    fn order(&self) -> i32 { (*self).order() }
+    fn order(&self) -> i32 {
+        (*self).order()
+    }
 }
 
 #[cfg(feature = "grid")]
@@ -1056,19 +1061,19 @@ impl<S: CheapCloneStr> GridContainerStyle for Style<S> {
         self.gap
     }
     #[inline(always)]
-    fn align_content(&self) -> Option<AlignContent> {
+    fn align_content(&self) -> AlignContent {
         self.align_content
     }
     #[inline(always)]
-    fn justify_content(&self) -> Option<JustifyContent> {
+    fn justify_content(&self) -> JustifyContent {
         self.justify_content
     }
     #[inline(always)]
-    fn align_items(&self) -> Option<AlignItems> {
+    fn align_items(&self) -> AlignItems {
         self.align_items
     }
     #[inline(always)]
-    fn justify_items(&self) -> Option<AlignItems> {
+    fn justify_items(&self) -> JustifyItems {
         self.justify_items
     }
 
@@ -1160,19 +1165,19 @@ impl<T: GridContainerStyle> GridContainerStyle for &'_ T {
         (*self).gap()
     }
     #[inline(always)]
-    fn align_content(&self) -> Option<AlignContent> {
+    fn align_content(&self) -> AlignContent {
         (*self).align_content()
     }
     #[inline(always)]
-    fn justify_content(&self) -> Option<JustifyContent> {
+    fn justify_content(&self) -> JustifyContent {
         (*self).justify_content()
     }
     #[inline(always)]
-    fn align_items(&self) -> Option<AlignItems> {
+    fn align_items(&self) -> AlignItems {
         (*self).align_items()
     }
     #[inline(always)]
-    fn justify_items(&self) -> Option<AlignItems> {
+    fn justify_items(&self) -> JustifyItems {
         (*self).justify_items()
     }
 }
@@ -1190,11 +1195,11 @@ impl<S: CheapCloneStr> GridItemStyle for Style<S> {
         self.grid_column.clone()
     }
     #[inline(always)]
-    fn align_self(&self) -> Option<AlignSelf> {
+    fn align_self(&self) -> AlignSelf {
         self.align_self
     }
     #[inline(always)]
-    fn justify_self(&self) -> Option<AlignSelf> {
+    fn justify_self(&self) -> JustifySelf {
         self.justify_self
     }
 }
@@ -1210,11 +1215,11 @@ impl<T: GridItemStyle> GridItemStyle for &'_ T {
         (*self).grid_column()
     }
     #[inline(always)]
-    fn align_self(&self) -> Option<AlignSelf> {
+    fn align_self(&self) -> AlignSelf {
         (*self).align_self()
     }
     #[inline(always)]
-    fn justify_self(&self) -> Option<AlignSelf> {
+    fn justify_self(&self) -> JustifySelf {
         (*self).justify_self()
     }
 }
@@ -1223,7 +1228,7 @@ impl<T: GridItemStyle> GridItemStyle for &'_ T {
 mod tests {
     use std::sync::Arc;
 
-    use super::Style;
+    use super::{AlignContent, AlignItems, AlignSelf, JustifyContent, JustifyItems, JustifySelf, Style};
     use crate::sys::DefaultCheapStr;
     use crate::{geometry::*, style_helpers::GummyAuto as _};
 
@@ -1251,19 +1256,19 @@ mod tests {
             #[cfg(feature = "flexbox")]
             flex_wrap: Default::default(),
             #[cfg(any(feature = "flexbox", feature = "grid"))]
-            align_items: Default::default(),
+            align_items: AlignItems::NORMAL,
             #[cfg(any(feature = "flexbox", feature = "grid"))]
-            align_self: Default::default(),
+            align_self: AlignSelf::AUTO,
             #[cfg(feature = "grid")]
-            justify_items: Default::default(),
+            justify_items: JustifyItems::NORMAL,
             #[cfg(feature = "grid")]
-            justify_self: Default::default(),
+            justify_self: JustifySelf::AUTO,
             #[cfg(any(feature = "flexbox", feature = "grid", feature = "block_layout"))]
-            align_content: Default::default(),
+            align_content: AlignContent::NORMAL,
             #[cfg(any(feature = "flexbox", feature = "grid"))]
             order: 0,
             #[cfg(any(feature = "flexbox", feature = "grid"))]
-            justify_content: Default::default(),
+            justify_content: JustifyContent::NORMAL,
             inset: Rect::auto(),
             margin: Rect::zero(),
             padding: Rect::zero(),
@@ -1351,16 +1356,13 @@ mod tests {
         assert_type_size::<Rect<LengthPercentageAuto>>(32);
         assert_type_size::<Rect<Dimension>>(32);
 
-        // Alignment — `AlignContent` and `AlignItems` are structs of two `#[repr(u8)]` enums
-        // (position keyword + safety modifier). Niche-packing in the safety byte (only 2 of
-        // 256 values used) lets `Option<_>` stay the same size as the bare struct.
-        assert_type_size::<AlignContentKeyword>(1);
-        assert_type_size::<AlignItemsKeyword>(1);
-        assert_type_size::<AlignmentSafety>(1);
-        assert_type_size::<AlignContent>(2);
-        assert_type_size::<AlignItems>(2);
-        assert_type_size::<Option<AlignItems>>(2);
-        assert_type_size::<Option<AlignContent>>(2);
+        // Each alignment is a simple POD enum.
+        assert_type_size::<AlignContent>(1);
+        assert_type_size::<JustifyContent>(1);
+        assert_type_size::<AlignItems>(1);
+        assert_type_size::<JustifyItems>(1);
+        assert_type_size::<AlignSelf>(1);
+        assert_type_size::<JustifySelf>(1);
 
         // Flexbox Container
         assert_type_size::<FlexDirection>(1);

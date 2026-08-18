@@ -1,12 +1,13 @@
 //! Alignment of tracks and final positioning of items
 use super::types::GridTrack;
 use crate::compute::common::alignment::{
-    apply_alignment_fallback, compute_alignment_offset, resolve_self_alignment_safety,
+    apply_align_content_fallback, apply_justify_content_fallback, compute_align_content_offset,
+    compute_justify_content_offset, resolve_align_self_safety, resolve_justify_self_safety,
 };
-use crate::geometry::{InBothAbsAxis, Line, Point, Rect, Size};
+use crate::geometry::{Line, Point, Rect, Size};
 use crate::style::{
-    AlignContent, AlignItems, AlignItemsKeyword, AlignSelf, AvailableSpace, CoreStyle, GridItemStyle, Overflow,
-    Position,
+    AlignContent, AlignItems, AlignSelf, AvailableSpace, CoreStyle, GridItemStyle, JustifyContent, JustifyItems,
+    JustifySelf, Overflow, Position,
 };
 use crate::tree::{Layout, LayoutPartialTreeExt, NodeId, SizingMode};
 use crate::util::sys::f32_max;
@@ -38,14 +39,14 @@ pub(super) fn align_tracks(
     // simply pass zero here. Grid layout is never reversed.
     let gap = 0.0;
     let layout_is_reversed = false;
-    let track_alignment = apply_alignment_fallback(free_space, num_tracks, track_alignment_style);
+    let track_alignment = apply_align_content_fallback(free_space, num_tracks, track_alignment_style);
     let track_alignment = if axis_is_reversed { track_alignment.reversed() } else { track_alignment };
 
     // If every track is collapsed then no track receives the alignment offset below, but the
     // grid's lines should still be aligned within the container (e.g. at the inline-start edge
     // for RTL), so apply the offset to the origin instead.
     let empty_grid_offset = if num_tracks == 0 {
-        compute_alignment_offset(free_space, num_tracks, gap, track_alignment, layout_is_reversed, true)
+        compute_align_content_offset(free_space, num_tracks, gap, track_alignment, layout_is_reversed, true)
     } else {
         0.0
     };
@@ -62,7 +63,7 @@ pub(super) fn align_tracks(
         let is_first = is_non_collapsed_track && !seen_non_collapsed_track;
 
         let offset = if is_non_collapsed_track {
-            compute_alignment_offset(free_space, num_tracks, gap, track_alignment, layout_is_reversed, is_first)
+            compute_align_content_offset(free_space, num_tracks, gap, track_alignment, layout_is_reversed, is_first)
         } else {
             0.0
         };
@@ -75,6 +76,109 @@ pub(super) fn align_tracks(
     });
 }
 
+/// Align grid columns according to `justify-content`.
+pub(super) fn justify_tracks(
+    grid_container_content_box_size: f32,
+    padding: Line<f32>,
+    border: Line<f32>,
+    tracks: &mut [GridTrack],
+    track_alignment_style: JustifyContent,
+    axis_is_reversed: bool,
+) {
+    let used_size: f32 = tracks.iter().map(|track| track.base_size).sum();
+    let free_space = grid_container_content_box_size - used_size;
+    let origin = padding.start + border.start;
+    let num_tracks = tracks.iter().skip(1).step_by(2).filter(|track| !track.is_collapsed).count();
+    let gap = 0.0;
+    let layout_is_reversed = false;
+    let track_alignment = apply_justify_content_fallback(free_space, num_tracks, track_alignment_style);
+    let track_alignment = if axis_is_reversed { track_alignment.reversed() } else { track_alignment };
+
+    let empty_grid_offset = if num_tracks == 0 {
+        compute_justify_content_offset(free_space, num_tracks, gap, track_alignment, layout_is_reversed, true)
+    } else {
+        0.0
+    };
+
+    let mut total_offset = origin + empty_grid_offset;
+    let mut seen_non_collapsed_track = false;
+    tracks.iter_mut().enumerate().for_each(|(i, track)| {
+        let is_gutter = i % 2 == 0;
+        let is_non_collapsed_track = !is_gutter && !track.is_collapsed;
+        let is_first = is_non_collapsed_track && !seen_non_collapsed_track;
+        let offset = if is_non_collapsed_track {
+            compute_justify_content_offset(free_space, num_tracks, gap, track_alignment, layout_is_reversed, is_first)
+        } else {
+            0.0
+        };
+
+        track.offset = total_offset + offset;
+        total_offset = total_offset + offset + track.base_size;
+        if is_non_collapsed_track {
+            seen_non_collapsed_track = true;
+        }
+    });
+}
+
+#[inline]
+/// Resolves `align-self`, including inheritance, `normal`, and self-relative positions.
+fn resolve_grid_self_alignment(
+    self_alignment: AlignSelf,
+    container_alignment: AlignItems,
+    normal_alignment: AlignSelf,
+    item_direction: Direction,
+    container_direction: Direction,
+    axis_is_inline: bool,
+) -> AlignSelf {
+    let inherited_alignment = match self_alignment {
+        AlignSelf::Auto => container_alignment.into(),
+        _ => self_alignment,
+    };
+    let concrete_alignment = match inherited_alignment {
+        AlignSelf::Normal | AlignSelf::Auto => normal_alignment,
+        _ => inherited_alignment,
+    };
+    concrete_alignment.resolve_self_relative(item_direction, container_direction, axis_is_inline)
+}
+
+#[inline]
+/// Resolves `justify-self`, including inheritance, `normal`, and self-relative positions.
+fn resolve_grid_justify_self_alignment(
+    self_alignment: JustifySelf,
+    container_alignment: JustifyItems,
+    normal_alignment: JustifySelf,
+    item_direction: Direction,
+    container_direction: Direction,
+) -> JustifySelf {
+    let inherited_alignment = match self_alignment {
+        JustifySelf::Auto => container_alignment.into(),
+        _ => self_alignment,
+    };
+    let concrete_alignment = match inherited_alignment {
+        JustifySelf::Normal | JustifySelf::Auto => normal_alignment,
+        _ => inherited_alignment,
+    };
+    concrete_alignment.resolve_self_relative(item_direction, container_direction, true)
+}
+
+#[derive(Copy, Clone)]
+/// The container-side item alignment values for both grid axes.
+pub(super) struct GridContainerAlignmentStyles {
+    /// The inline-axis `justify-items` value.
+    pub(super) justify_items: JustifyItems,
+    /// The block-axis `align-items` value.
+    pub(super) align_items: AlignItems,
+}
+
+#[derive(Copy, Clone)]
+/// The resolved self-alignment values for a grid item in both axes.
+struct GridItemAlignmentStyles {
+    /// The inline-axis `justify-self` value.
+    horizontal: JustifySelf,
+    /// The block-axis `align-self` value.
+    vertical: AlignSelf,
+}
+
 /// Align and size a grid item into it's final position
 #[allow(clippy::too_many_arguments)]
 pub(super) fn align_and_position_item(
@@ -82,7 +186,7 @@ pub(super) fn align_and_position_item(
     node: NodeId,
     order: u32,
     grid_area: Rect<f32>,
-    container_alignment_styles: InBothAbsAxis<Option<AlignItems>>,
+    container_alignment_styles: GridContainerAlignmentStyles,
     baseline_shim: f32,
     direction: Direction,
     container_border_box_width: f32,
@@ -96,19 +200,11 @@ pub(super) fn align_and_position_item(
     let scrollbar_width = style.scrollbar_width();
     let aspect_ratio = style.aspect_ratio();
     // Resolve writing-mode-relative self-start/self-end keywords against the item's own
-    // direction. The horizontal axis is the inline axis (Taffy only supports horizontal-tb);
+    // direction. The horizontal axis is the inline axis (Gummy only supports horizontal-tb);
     // the vertical (block) axis resolves them to plain start/end.
     let item_direction = style.direction();
-    let justify_self = style.justify_self().map(|align| align.resolve_self_relative(item_direction, direction, true));
-    let align_self = style.align_self().map(|align| align.resolve_self_relative(item_direction, direction, false));
-    let container_alignment_styles = InBothAbsAxis {
-        horizontal: container_alignment_styles
-            .horizontal
-            .map(|align| align.resolve_self_relative(item_direction, direction, true)),
-        vertical: container_alignment_styles
-            .vertical
-            .map(|align| align.resolve_self_relative(item_direction, direction, false)),
-    };
+    let justify_self = style.justify_self();
+    let align_self = style.align_self();
 
     let position = style.position();
     let inset_horizontal = style
@@ -150,21 +246,26 @@ pub(super) fn align_and_position_item(
     // Note: if the child has a preferred aspect ratio but neither width or height are set, then the width is stretched
     // and the then height is calculated from the width according the aspect ratio
     // See: https://www.w3.org/TR/css-grid-1/#grid-item-sizing
-    let alignment_styles = InBothAbsAxis {
-        horizontal: justify_self.or(container_alignment_styles.horizontal).unwrap_or_else(|| {
-            if inherent_size.width.is_some() {
-                AlignSelf::START
-            } else {
-                AlignSelf::STRETCH
-            }
-        }),
-        vertical: align_self.or(container_alignment_styles.vertical).unwrap_or_else(|| {
+    let alignment_styles = GridItemAlignmentStyles {
+        horizontal: resolve_grid_justify_self_alignment(
+            justify_self,
+            container_alignment_styles.justify_items,
+            if inherent_size.width.is_some() { JustifySelf::START } else { JustifySelf::STRETCH },
+            item_direction,
+            direction,
+        ),
+        vertical: resolve_grid_self_alignment(
+            align_self,
+            container_alignment_styles.align_items,
             if inherent_size.height.is_some() || aspect_ratio.is_some() {
                 AlignSelf::START
             } else {
                 AlignSelf::STRETCH
-            }
-        }),
+            },
+            item_direction,
+            direction,
+            false,
+        ),
     };
 
     // Note: This is not a bug. It is part of the CSS spec that both horizontal and vertical margins
@@ -194,7 +295,7 @@ pub(super) fn align_and_position_item(
         //  - The node does not have auto margins in this axis.
         if margin.left.is_some()
             && margin.right.is_some()
-            && alignment_styles.horizontal == AlignSelf::STRETCH
+            && alignment_styles.horizontal == JustifySelf::STRETCH
             && position != Position::Absolute
         {
             return Some(grid_area_minus_item_margins_size.width);
@@ -245,7 +346,7 @@ pub(super) fn align_and_position_item(
             SizingMode::InherentSize,
             Line::FALSE,
         )
-            .map(Some)
+        .map(Some)
     } else {
         Size { width, height }
     };
@@ -262,9 +363,9 @@ pub(super) fn align_and_position_item(
     // Resolve final size
     let Size { width, height } = size.unwrap_or(layout_output.size).maybe_clamp(min_size, max_size);
 
-    let (x, x_margin) = align_item_within_area(
+    let (x, x_margin) = justify_item_within_area(
         Line { start: grid_area.left, end: grid_area.right },
-        justify_self.unwrap_or(alignment_styles.horizontal),
+        alignment_styles.horizontal,
         width,
         position,
         inset_horizontal,
@@ -274,7 +375,7 @@ pub(super) fn align_and_position_item(
     );
     let (y, y_margin) = align_item_within_area(
         Line { start: grid_area.top, end: grid_area.bottom },
-        align_self.unwrap_or(alignment_styles.vertical),
+        alignment_styles.vertical,
         height,
         position,
         inset_vertical,
@@ -353,34 +454,125 @@ pub(super) fn align_item_within_area(
     };
 
     let overflows = resolved_size + non_auto_margin.sum() > grid_area_size;
-    let alignment_keyword = resolve_self_alignment_safety(alignment_style, overflows);
+    let alignment = resolve_align_self_safety(alignment_style, overflows);
 
     // Compute offset in the axis
-    let alignment_based_offset = match alignment_keyword {
+    let alignment_based_offset = match alignment {
         // TODO: Add support for baseline alignment. For now we treat it as "start".
-        AlignItemsKeyword::Start
-        | AlignItemsKeyword::FlexStart
-        | AlignItemsKeyword::Baseline
-        | AlignItemsKeyword::Stretch => {
+        AlignSelf::Start | AlignSelf::FlexStart | AlignSelf::Baseline | AlignSelf::Stretch => {
             if direction.is_rtl() {
                 grid_area_size - resolved_size - resolved_margin.end
             } else {
                 resolved_margin.start
             }
         }
-        AlignItemsKeyword::End | AlignItemsKeyword::FlexEnd => {
+        AlignSelf::End | AlignSelf::FlexEnd => {
             if direction.is_rtl() {
                 resolved_margin.start
             } else {
                 grid_area_size - resolved_size - resolved_margin.end
             }
         }
-        AlignItemsKeyword::Center => {
-            (grid_area_size - resolved_size + resolved_margin.start - resolved_margin.end) / 2.0
-        }
+        AlignSelf::Center => (grid_area_size - resolved_size + resolved_margin.start - resolved_margin.end) / 2.0,
         // SelfStart/SelfEnd are resolved to Start/End against the item's own direction in
         // `align_and_position_item`.
-        AlignItemsKeyword::SelfStart | AlignItemsKeyword::SelfEnd => unreachable!(),
+        AlignSelf::SelfStart | AlignSelf::SelfEnd | AlignSelf::SafeSelfStart | AlignSelf::SafeSelfEnd => unreachable!(),
+        AlignSelf::Normal
+        | AlignSelf::Auto
+        | AlignSelf::SafeStart
+        | AlignSelf::SafeEnd
+        | AlignSelf::SafeFlexStart
+        | AlignSelf::SafeFlexEnd
+        | AlignSelf::SafeCenter => {
+            unreachable!("alignment sentinels are resolved before grid item positioning")
+        }
+    };
+
+    let offset_within_area = if position == Position::Absolute {
+        match (inset.start, inset.end) {
+            (Some(start), Some(end)) => {
+                if direction.is_rtl() {
+                    grid_area_size - end - resolved_size - non_auto_margin.end
+                } else {
+                    start + non_auto_margin.start
+                }
+            }
+            (Some(start), None) => start + non_auto_margin.start,
+            (None, Some(end)) => grid_area_size - end - resolved_size - non_auto_margin.end,
+            (None, None) => alignment_based_offset,
+        }
+    } else {
+        alignment_based_offset
+    };
+
+    let mut start = grid_area.start + offset_within_area;
+    if position == Position::Relative {
+        let relative_inset = if direction.is_rtl() {
+            inset.end.map(|pos| -pos).or(inset.start)
+        } else {
+            inset.start.or(inset.end.map(|pos| -pos))
+        };
+        start += relative_inset.unwrap_or(0.0);
+    }
+
+    (start, resolved_margin)
+}
+
+/// Justify and size a grid item along its inline axis.
+#[allow(clippy::too_many_arguments)]
+fn justify_item_within_area(
+    grid_area: Line<f32>,
+    alignment_style: JustifySelf,
+    resolved_size: f32,
+    position: Position,
+    inset: Line<Option<f32>>,
+    margin: Line<Option<f32>>,
+    baseline_shim: f32,
+    direction: Direction,
+) -> (f32, Line<f32>) {
+    let non_auto_margin = Line { start: margin.start.unwrap_or(0.0) + baseline_shim, end: margin.end.unwrap_or(0.0) };
+    let grid_area_size = f32_max(grid_area.end - grid_area.start, 0.0);
+    let free_space = f32_max(grid_area_size - resolved_size - non_auto_margin.sum(), 0.0);
+
+    let auto_margin_count = margin.start.is_none() as u8 + margin.end.is_none() as u8;
+    let auto_margin_size = if auto_margin_count > 0 { free_space / auto_margin_count as f32 } else { 0.0 };
+    let resolved_margin = Line {
+        start: margin.start.unwrap_or(auto_margin_size) + baseline_shim,
+        end: margin.end.unwrap_or(auto_margin_size),
+    };
+
+    let overflows = resolved_size + non_auto_margin.sum() > grid_area_size;
+    let alignment = resolve_justify_self_safety(alignment_style, overflows);
+
+    let alignment_based_offset = match alignment {
+        // TODO: Add support for baseline alignment. For now we treat it as "start".
+        JustifySelf::Start | JustifySelf::FlexStart | JustifySelf::Baseline | JustifySelf::Stretch => {
+            if direction.is_rtl() {
+                grid_area_size - resolved_size - resolved_margin.end
+            } else {
+                resolved_margin.start
+            }
+        }
+        JustifySelf::End | JustifySelf::FlexEnd => {
+            if direction.is_rtl() {
+                resolved_margin.start
+            } else {
+                grid_area_size - resolved_size - resolved_margin.end
+            }
+        }
+        JustifySelf::Center => (grid_area_size - resolved_size + resolved_margin.start - resolved_margin.end) / 2.0,
+        JustifySelf::SelfStart | JustifySelf::SelfEnd | JustifySelf::SafeSelfStart | JustifySelf::SafeSelfEnd => {
+            unreachable!()
+        }
+        JustifySelf::Normal
+        | JustifySelf::Auto
+        | JustifySelf::SafeStart
+        | JustifySelf::SafeEnd
+        | JustifySelf::SafeFlexStart
+        | JustifySelf::SafeFlexEnd
+        | JustifySelf::SafeCenter => {
+            unreachable!("alignment sentinels are resolved before grid item positioning")
+        }
     };
 
     let offset_within_area = if position == Position::Absolute {

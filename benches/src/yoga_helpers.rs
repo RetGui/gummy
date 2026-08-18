@@ -142,42 +142,80 @@ fn into_pixels(dim: impl Into<tf::Dimension>) -> f32 {
     dim.into().into_option().unwrap_or(0.0)
 }
 
-fn items_into_align(align: Option<tf::AlignSelf>) -> yg::Align {
-    // Yoga has no safe/unsafe overflow-position concept — drop the safety field and dispatch
-    // on the bare keyword. Safe and unsafe alike fold to the same yoga keyword.
-    let Some(align) = align else { return yg::Align::Auto };
-    match align.keyword {
-        tf::AlignItemsKeyword::FlexStart => yg::Align::FlexStart,
-        tf::AlignItemsKeyword::FlexEnd => yg::Align::FlexEnd,
-        tf::AlignItemsKeyword::Center => yg::Align::Center,
-        tf::AlignItemsKeyword::Baseline => yg::Align::Baseline,
-        tf::AlignItemsKeyword::Stretch => yg::Align::Stretch,
-        tf::AlignItemsKeyword::Start | tf::AlignItemsKeyword::End => unimplemented!(),
+fn items_into_align(align: tf::AlignItems) -> yg::Align {
+    // Yoga has no safe/unsafe overflow-position concept.
+    match align {
+        tf::AlignItems::Normal => yg::Align::Auto,
+        tf::AlignItems::FlexStart | tf::AlignItems::SafeFlexStart => yg::Align::FlexStart,
+        tf::AlignItems::FlexEnd | tf::AlignItems::SafeFlexEnd => yg::Align::FlexEnd,
+        tf::AlignItems::Center | tf::AlignItems::SafeCenter => yg::Align::Center,
+        tf::AlignItems::Baseline => yg::Align::Baseline,
+        tf::AlignItems::Stretch => yg::Align::Stretch,
+        tf::AlignItems::Start
+        | tf::AlignItems::End
+        | tf::AlignItems::SelfStart
+        | tf::AlignItems::SelfEnd
+        | tf::AlignItems::SafeStart
+        | tf::AlignItems::SafeEnd
+        | tf::AlignItems::SafeSelfStart
+        | tf::AlignItems::SafeSelfEnd => unimplemented!(),
     }
 }
 
-fn content_into_align(align: Option<tf::AlignContent>) -> yg::Align {
-    let Some(align) = align else { return yg::Align::Auto };
-    match align.keyword {
-        tf::AlignContentKeyword::FlexStart | tf::AlignContentKeyword::Start => yg::Align::FlexStart,
-        tf::AlignContentKeyword::FlexEnd | tf::AlignContentKeyword::End => yg::Align::FlexEnd,
-        tf::AlignContentKeyword::Center => yg::Align::Center,
-        tf::AlignContentKeyword::Stretch => yg::Align::Stretch,
-        tf::AlignContentKeyword::SpaceBetween => yg::Align::SpaceBetween,
-        tf::AlignContentKeyword::SpaceAround => yg::Align::SpaceAround,
-        tf::AlignContentKeyword::SpaceEvenly => unimplemented!(),
+fn self_into_align(align: tf::AlignSelf) -> yg::Align {
+    // Yoga has no safe/unsafe overflow-position concept.
+    match align {
+        tf::AlignSelf::Normal | tf::AlignSelf::Auto => yg::Align::Auto,
+        tf::AlignSelf::FlexStart | tf::AlignSelf::SafeFlexStart => yg::Align::FlexStart,
+        tf::AlignSelf::FlexEnd | tf::AlignSelf::SafeFlexEnd => yg::Align::FlexEnd,
+        tf::AlignSelf::Center | tf::AlignSelf::SafeCenter => yg::Align::Center,
+        tf::AlignSelf::Baseline => yg::Align::Baseline,
+        tf::AlignSelf::Stretch => yg::Align::Stretch,
+        tf::AlignSelf::Start
+        | tf::AlignSelf::End
+        | tf::AlignSelf::SelfStart
+        | tf::AlignSelf::SelfEnd
+        | tf::AlignSelf::SafeStart
+        | tf::AlignSelf::SafeEnd
+        | tf::AlignSelf::SafeSelfStart
+        | tf::AlignSelf::SafeSelfEnd => unimplemented!(),
     }
 }
 
-fn content_into_justify(align: Option<tf::JustifyContent>) -> yg::Justify {
-    let Some(align) = align else { return yg::Justify::FlexStart };
-    match align.keyword {
-        tf::AlignContentKeyword::FlexStart | tf::AlignContentKeyword::Start => yg::Justify::FlexStart,
-        tf::AlignContentKeyword::FlexEnd | tf::AlignContentKeyword::End => yg::Justify::FlexEnd,
-        tf::AlignContentKeyword::Center => yg::Justify::Center,
-        tf::AlignContentKeyword::SpaceBetween => yg::Justify::SpaceBetween,
-        tf::AlignContentKeyword::SpaceAround => yg::Justify::SpaceAround,
-        tf::AlignContentKeyword::Stretch | tf::AlignContentKeyword::SpaceEvenly => unimplemented!(),
+fn content_into_align(align: tf::AlignContent) -> yg::Align {
+    match align {
+        tf::AlignContent::Normal => yg::Align::Auto,
+        tf::AlignContent::FlexStart
+        | tf::AlignContent::Start
+        | tf::AlignContent::SafeFlexStart
+        | tf::AlignContent::SafeStart => yg::Align::FlexStart,
+        tf::AlignContent::FlexEnd
+        | tf::AlignContent::End
+        | tf::AlignContent::SafeFlexEnd
+        | tf::AlignContent::SafeEnd => yg::Align::FlexEnd,
+        tf::AlignContent::Center | tf::AlignContent::SafeCenter => yg::Align::Center,
+        tf::AlignContent::Stretch => yg::Align::Stretch,
+        tf::AlignContent::SpaceBetween => yg::Align::SpaceBetween,
+        tf::AlignContent::SpaceAround => yg::Align::SpaceAround,
+        tf::AlignContent::SpaceEvenly => unimplemented!(),
+    }
+}
+
+fn content_into_justify(align: tf::JustifyContent) -> yg::Justify {
+    match align {
+        tf::JustifyContent::Normal
+        | tf::JustifyContent::FlexStart
+        | tf::JustifyContent::Start
+        | tf::JustifyContent::SafeFlexStart
+        | tf::JustifyContent::SafeStart => yg::Justify::FlexStart,
+        tf::JustifyContent::FlexEnd
+        | tf::JustifyContent::End
+        | tf::JustifyContent::SafeFlexEnd
+        | tf::JustifyContent::SafeEnd => yg::Justify::FlexEnd,
+        tf::JustifyContent::Center | tf::JustifyContent::SafeCenter => yg::Justify::Center,
+        tf::JustifyContent::SpaceBetween => yg::Justify::SpaceBetween,
+        tf::JustifyContent::SpaceAround => yg::Justify::SpaceAround,
+        tf::JustifyContent::Stretch | tf::JustifyContent::SpaceEvenly => unimplemented!(),
     }
 }
 
@@ -236,7 +274,7 @@ fn apply_gummy_style(node: &mut yg::Node, style: &tf::Style) {
 
     // alignment
     node.set_align_items(items_into_align(style.align_items));
-    node.set_align_self(items_into_align(style.align_self));
+    node.set_align_self(self_into_align(style.align_self));
     node.set_align_content(content_into_align(style.align_content));
     node.set_justify_content(content_into_justify(style.justify_content));
 
