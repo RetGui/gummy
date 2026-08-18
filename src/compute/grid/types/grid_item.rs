@@ -4,7 +4,7 @@ use crate::compute::grid::OriginZeroLine;
 use crate::geometry::AbstractAxis;
 use crate::geometry::{Line, Point, Rect, Size};
 use crate::style::{
-    AlignItems, AlignItemsKeyword, AlignSelf, AvailableSpace, Dimension, LengthPercentageAuto, Overflow,
+    AlignItems, AlignSelf, AvailableSpace, Dimension, JustifyItems, JustifySelf, LengthPercentageAuto, Overflow,
 };
 use crate::tree::{LayoutPartialTree, LayoutPartialTreeExt, NodeId, SizingMode};
 use crate::util::{MaybeMath, MaybeResolve, ResolveOrZero};
@@ -12,13 +12,30 @@ use crate::{BoxSizing, GridItemStyle, LengthPercentage};
 use core::ops::Range;
 
 #[inline]
+/// Resolves an item's block-axis alignment for intrinsic sizing.
 fn resolve_grid_item_alignment_for_sizing(self_alignment: AlignSelf, parent_alignment: AlignItems) -> AlignSelf {
-    let inherited_alignment = match self_alignment.keyword() {
-        AlignItemsKeyword::Auto => parent_alignment,
+    let inherited_alignment = match self_alignment {
+        AlignSelf::Auto => parent_alignment.into(),
         _ => self_alignment,
     };
-    match inherited_alignment.keyword() {
-        AlignItemsKeyword::Normal | AlignItemsKeyword::Auto => AlignSelf::STRETCH,
+    match inherited_alignment {
+        AlignSelf::Normal | AlignSelf::Auto => AlignSelf::STRETCH,
+        _ => inherited_alignment,
+    }
+}
+
+#[inline]
+/// Resolves an item's inline-axis alignment for intrinsic sizing.
+fn resolve_grid_justify_item_alignment_for_sizing(
+    self_alignment: JustifySelf,
+    parent_alignment: JustifyItems,
+) -> JustifySelf {
+    let inherited_alignment = match self_alignment {
+        JustifySelf::Auto => parent_alignment.into(),
+        _ => self_alignment,
+    };
+    match inherited_alignment {
+        JustifySelf::Normal | JustifySelf::Auto => JustifySelf::STRETCH,
         _ => inherited_alignment,
     }
 }
@@ -66,7 +83,7 @@ pub(in super::super) struct GridItem {
     /// The resolved align-self value used during grid track sizing
     pub align_self: AlignSelf,
     /// The resolved justify-self value used during grid track sizing
-    pub justify_self: AlignSelf,
+    pub justify_self: JustifySelf,
     /// The items first baseline (horizontal)
     pub baseline: Option<f32>,
     /// Shim for baseline alignment that acts like an extra top margin
@@ -113,7 +130,7 @@ impl GridItem {
         row_span: Line<OriginZeroLine>,
         style: S,
         parent_align_items: AlignItems,
-        parent_justify_items: AlignItems,
+        parent_justify_items: JustifyItems,
         source_order: u16,
     ) -> Self {
         GridItem {
@@ -132,7 +149,7 @@ impl GridItem {
             border: style.border(),
             margin: style.margin(),
             align_self: resolve_grid_item_alignment_for_sizing(style.align_self(), parent_align_items),
-            justify_self: resolve_grid_item_alignment_for_sizing(style.justify_self(), parent_justify_items),
+            justify_self: resolve_grid_justify_item_alignment_for_sizing(style.justify_self(), parent_justify_items),
             baseline: None,
             baseline_shim: 0.0,
             row_indexes: Line { start: 0, end: 0 }, // Properly initialised later
@@ -299,7 +316,8 @@ impl GridItem {
             //  - Alignment style is "stretch"
             //  - The node is not absolutely positioned
             //  - The node does not have auto margins in this axis.
-            if !self.margin.left.is_auto() && !self.margin.right.is_auto() && self.justify_self == AlignSelf::STRETCH {
+            if !self.margin.left.is_auto() && !self.margin.right.is_auto() && self.justify_self == JustifySelf::STRETCH
+            {
                 return grid_area_minus_item_margins_size.width;
             }
 

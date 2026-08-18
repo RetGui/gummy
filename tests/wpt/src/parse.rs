@@ -1101,7 +1101,7 @@ fn apply_unparsed_declaration(
         "flex-grow" => set_if_parse(value, |parsed| style.flex_grow = parsed),
         "flex-shrink" => set_if_parse(value, |parsed| style.flex_shrink = parsed),
         "flex-basis" => set_if_parse(value, |parsed| style.flex_basis = parsed),
-        "order"      => set_if_parse(value, |parsed| style.order = parsed),
+        "order" => set_if_parse(value, |parsed| style.order = parsed),
         "align-items" => set_if_parse(value, |parsed| style.align_items = parsed),
         "align-self" => set_if_parse(value, |parsed| style.align_self = parsed),
         "align-content" => set_if_parse(value, |parsed| style.align_content = parsed),
@@ -1666,23 +1666,83 @@ pub fn css_flex_wrap(value: &lightningcss::properties::flex::FlexWrap) -> gummy:
     }
 }
 
-pub fn css_alignment_safety(
-    value: Option<&lightningcss::properties::align::OverflowPosition>,
-) -> gummy::AlignmentSafety {
-    match value {
-        Some(lightningcss::properties::align::OverflowPosition::Safe) => gummy::AlignmentSafety::Safe,
-        Some(lightningcss::properties::align::OverflowPosition::Unsafe) | None => gummy::AlignmentSafety::Unsafe,
+pub fn css_alignment_is_safe(value: Option<&lightningcss::properties::align::OverflowPosition>) -> bool {
+    matches!(value, Some(lightningcss::properties::align::OverflowPosition::Safe))
+}
+
+pub fn css_align_items_self_position(
+    value: &lightningcss::properties::align::SelfPosition,
+    overflow: Option<&lightningcss::properties::align::OverflowPosition>,
+) -> gummy::AlignItems {
+    use lightningcss::properties::align::SelfPosition;
+    match (css_alignment_is_safe(overflow), value) {
+        (true, SelfPosition::Center) => gummy::AlignItems::SAFE_CENTER,
+        (true, SelfPosition::Start | SelfPosition::SelfStart) => gummy::AlignItems::SAFE_START,
+        (true, SelfPosition::End | SelfPosition::SelfEnd) => gummy::AlignItems::SAFE_END,
+        (true, SelfPosition::FlexStart) => gummy::AlignItems::SAFE_FLEX_START,
+        (true, SelfPosition::FlexEnd) => gummy::AlignItems::SAFE_FLEX_END,
+        (false, SelfPosition::Center) => gummy::AlignItems::CENTER,
+        (false, SelfPosition::Start | SelfPosition::SelfStart) => gummy::AlignItems::START,
+        (false, SelfPosition::End | SelfPosition::SelfEnd) => gummy::AlignItems::END,
+        (false, SelfPosition::FlexStart) => gummy::AlignItems::FLEX_START,
+        (false, SelfPosition::FlexEnd) => gummy::AlignItems::FLEX_END,
     }
 }
 
-pub fn css_self_position(value: &lightningcss::properties::align::SelfPosition) -> gummy::AlignItemsKeyword {
+pub fn css_align_self_position(
+    value: &lightningcss::properties::align::SelfPosition,
+    overflow: Option<&lightningcss::properties::align::OverflowPosition>,
+) -> gummy::AlignSelf {
     use lightningcss::properties::align::SelfPosition;
-    match value {
-        SelfPosition::Center => gummy::AlignItemsKeyword::Center,
-        SelfPosition::Start | SelfPosition::SelfStart => gummy::AlignItemsKeyword::Start,
-        SelfPosition::End | SelfPosition::SelfEnd => gummy::AlignItemsKeyword::End,
-        SelfPosition::FlexStart => gummy::AlignItemsKeyword::FlexStart,
-        SelfPosition::FlexEnd => gummy::AlignItemsKeyword::FlexEnd,
+    match (css_alignment_is_safe(overflow), value) {
+        (true, SelfPosition::Center) => gummy::AlignSelf::SAFE_CENTER,
+        (true, SelfPosition::Start | SelfPosition::SelfStart) => gummy::AlignSelf::SAFE_START,
+        (true, SelfPosition::End | SelfPosition::SelfEnd) => gummy::AlignSelf::SAFE_END,
+        (true, SelfPosition::FlexStart) => gummy::AlignSelf::SAFE_FLEX_START,
+        (true, SelfPosition::FlexEnd) => gummy::AlignSelf::SAFE_FLEX_END,
+        (false, SelfPosition::Center) => gummy::AlignSelf::CENTER,
+        (false, SelfPosition::Start | SelfPosition::SelfStart) => gummy::AlignSelf::START,
+        (false, SelfPosition::End | SelfPosition::SelfEnd) => gummy::AlignSelf::END,
+        (false, SelfPosition::FlexStart) => gummy::AlignSelf::FLEX_START,
+        (false, SelfPosition::FlexEnd) => gummy::AlignSelf::FLEX_END,
+    }
+}
+
+pub fn css_justify_items_self_position(
+    value: &lightningcss::properties::align::SelfPosition,
+    overflow: Option<&lightningcss::properties::align::OverflowPosition>,
+) -> gummy::JustifyItems {
+    use lightningcss::properties::align::SelfPosition;
+    match (css_alignment_is_safe(overflow), value) {
+        (true, SelfPosition::Center) => gummy::JustifyItems::SAFE_CENTER,
+        (true, SelfPosition::Start | SelfPosition::SelfStart) => gummy::JustifyItems::SAFE_START,
+        (true, SelfPosition::End | SelfPosition::SelfEnd) => gummy::JustifyItems::SAFE_END,
+        (true, SelfPosition::FlexStart) => gummy::JustifyItems::SAFE_FLEX_START,
+        (true, SelfPosition::FlexEnd) => gummy::JustifyItems::SAFE_FLEX_END,
+        (false, SelfPosition::Center) => gummy::JustifyItems::CENTER,
+        (false, SelfPosition::Start | SelfPosition::SelfStart) => gummy::JustifyItems::START,
+        (false, SelfPosition::End | SelfPosition::SelfEnd) => gummy::JustifyItems::END,
+        (false, SelfPosition::FlexStart) => gummy::JustifyItems::FLEX_START,
+        (false, SelfPosition::FlexEnd) => gummy::JustifyItems::FLEX_END,
+    }
+}
+
+pub fn css_justify_self_position(
+    value: &lightningcss::properties::align::SelfPosition,
+    overflow: Option<&lightningcss::properties::align::OverflowPosition>,
+) -> gummy::JustifySelf {
+    use lightningcss::properties::align::SelfPosition;
+    match (css_alignment_is_safe(overflow), value) {
+        (true, SelfPosition::Center) => gummy::JustifySelf::SAFE_CENTER,
+        (true, SelfPosition::Start | SelfPosition::SelfStart) => gummy::JustifySelf::SAFE_START,
+        (true, SelfPosition::End | SelfPosition::SelfEnd) => gummy::JustifySelf::SAFE_END,
+        (true, SelfPosition::FlexStart) => gummy::JustifySelf::SAFE_FLEX_START,
+        (true, SelfPosition::FlexEnd) => gummy::JustifySelf::SAFE_FLEX_END,
+        (false, SelfPosition::Center) => gummy::JustifySelf::CENTER,
+        (false, SelfPosition::Start | SelfPosition::SelfStart) => gummy::JustifySelf::START,
+        (false, SelfPosition::End | SelfPosition::SelfEnd) => gummy::JustifySelf::END,
+        (false, SelfPosition::FlexStart) => gummy::JustifySelf::FLEX_START,
+        (false, SelfPosition::FlexEnd) => gummy::JustifySelf::FLEX_END,
     }
 }
 
@@ -1692,9 +1752,7 @@ pub fn css_align_items(value: &lightningcss::properties::align::AlignItems) -> g
         AlignItems::Normal => gummy::AlignItems::NORMAL,
         AlignItems::Stretch => gummy::AlignItems::STRETCH,
         AlignItems::BaselinePosition(_) => gummy::AlignItems::BASELINE,
-        AlignItems::SelfPosition { overflow, value } => {
-            gummy::AlignItems { keyword: css_self_position(value), safety: css_alignment_safety(overflow.as_ref()) }
-        }
+        AlignItems::SelfPosition { overflow, value } => css_align_items_self_position(value, overflow.as_ref()),
     }
 }
 
@@ -1705,9 +1763,7 @@ pub fn css_align_self(value: &lightningcss::properties::align::AlignSelf) -> gum
         AlignSelf::Normal => gummy::AlignSelf::NORMAL,
         AlignSelf::Stretch => gummy::AlignSelf::STRETCH,
         AlignSelf::BaselinePosition(_) => gummy::AlignSelf::BASELINE,
-        AlignSelf::SelfPosition { overflow, value } => {
-            gummy::AlignSelf { keyword: css_self_position(value), safety: css_alignment_safety(overflow.as_ref()) }
-        }
+        AlignSelf::SelfPosition { overflow, value } => css_align_self_position(value, overflow.as_ref()),
     }
 }
 
@@ -1717,17 +1773,21 @@ pub fn css_justify_items(value: &lightningcss::properties::align::JustifyItems) 
         JustifyItems::Normal => gummy::JustifyItems::NORMAL,
         JustifyItems::Stretch => gummy::JustifyItems::STRETCH,
         JustifyItems::BaselinePosition(_) => gummy::JustifyItems::BASELINE,
-        JustifyItems::SelfPosition { overflow, value } => {
-            gummy::JustifyItems { keyword: css_self_position(value), safety: css_alignment_safety(overflow.as_ref()) }
+        JustifyItems::SelfPosition { overflow, value } => css_justify_items_self_position(value, overflow.as_ref()),
+        JustifyItems::Left { overflow } => {
+            if css_alignment_is_safe(overflow.as_ref()) {
+                gummy::JustifyItems::SAFE_START
+            } else {
+                gummy::JustifyItems::START
+            }
         }
-        JustifyItems::Left { overflow } => gummy::JustifyItems {
-            keyword: gummy::AlignItemsKeyword::Start,
-            safety: css_alignment_safety(overflow.as_ref()),
-        },
-        JustifyItems::Right { overflow } => gummy::JustifyItems {
-            keyword: gummy::AlignItemsKeyword::End,
-            safety: css_alignment_safety(overflow.as_ref()),
-        },
+        JustifyItems::Right { overflow } => {
+            if css_alignment_is_safe(overflow.as_ref()) {
+                gummy::JustifyItems::SAFE_END
+            } else {
+                gummy::JustifyItems::END
+            }
+        }
         JustifyItems::Legacy(LegacyJustify::Left) => gummy::JustifyItems::START,
         JustifyItems::Legacy(LegacyJustify::Right) => gummy::JustifyItems::END,
         JustifyItems::Legacy(LegacyJustify::Center) => gummy::JustifyItems::CENTER,
@@ -1741,40 +1801,83 @@ pub fn css_justify_self(value: &lightningcss::properties::align::JustifySelf) ->
         JustifySelf::Normal => gummy::JustifySelf::NORMAL,
         JustifySelf::Stretch => gummy::JustifySelf::STRETCH,
         JustifySelf::BaselinePosition(_) => gummy::JustifySelf::BASELINE,
-        JustifySelf::SelfPosition { overflow, value } => {
-            gummy::JustifySelf { keyword: css_self_position(value), safety: css_alignment_safety(overflow.as_ref()) }
+        JustifySelf::SelfPosition { overflow, value } => css_justify_self_position(value, overflow.as_ref()),
+        JustifySelf::Left { overflow } => {
+            if css_alignment_is_safe(overflow.as_ref()) {
+                gummy::JustifySelf::SAFE_START
+            } else {
+                gummy::JustifySelf::START
+            }
         }
-        JustifySelf::Left { overflow } => gummy::JustifySelf {
-            keyword: gummy::AlignItemsKeyword::Start,
-            safety: css_alignment_safety(overflow.as_ref()),
-        },
-        JustifySelf::Right { overflow } => gummy::JustifySelf {
-            keyword: gummy::AlignItemsKeyword::End,
-            safety: css_alignment_safety(overflow.as_ref()),
-        },
+        JustifySelf::Right { overflow } => {
+            if css_alignment_is_safe(overflow.as_ref()) {
+                gummy::JustifySelf::SAFE_END
+            } else {
+                gummy::JustifySelf::END
+            }
+        }
     }
 }
 
-pub fn css_content_position(value: &lightningcss::properties::align::ContentPosition) -> gummy::AlignContentKeyword {
+pub fn css_align_content_position(
+    value: &lightningcss::properties::align::ContentPosition,
+    overflow: Option<&lightningcss::properties::align::OverflowPosition>,
+) -> gummy::AlignContent {
     use lightningcss::properties::align::ContentPosition;
-    match value {
-        ContentPosition::Center => gummy::AlignContentKeyword::Center,
-        ContentPosition::Start => gummy::AlignContentKeyword::Start,
-        ContentPosition::End => gummy::AlignContentKeyword::End,
-        ContentPosition::FlexStart => gummy::AlignContentKeyword::FlexStart,
-        ContentPosition::FlexEnd => gummy::AlignContentKeyword::FlexEnd,
+    match (css_alignment_is_safe(overflow), value) {
+        (true, ContentPosition::Center) => gummy::AlignContent::SAFE_CENTER,
+        (true, ContentPosition::Start) => gummy::AlignContent::SAFE_START,
+        (true, ContentPosition::End) => gummy::AlignContent::SAFE_END,
+        (true, ContentPosition::FlexStart) => gummy::AlignContent::SAFE_FLEX_START,
+        (true, ContentPosition::FlexEnd) => gummy::AlignContent::SAFE_FLEX_END,
+        (false, ContentPosition::Center) => gummy::AlignContent::CENTER,
+        (false, ContentPosition::Start) => gummy::AlignContent::START,
+        (false, ContentPosition::End) => gummy::AlignContent::END,
+        (false, ContentPosition::FlexStart) => gummy::AlignContent::FLEX_START,
+        (false, ContentPosition::FlexEnd) => gummy::AlignContent::FLEX_END,
     }
 }
 
-pub fn css_content_distribution(
+pub fn css_justify_content_position(
+    value: &lightningcss::properties::align::ContentPosition,
+    overflow: Option<&lightningcss::properties::align::OverflowPosition>,
+) -> gummy::JustifyContent {
+    use lightningcss::properties::align::ContentPosition;
+    match (css_alignment_is_safe(overflow), value) {
+        (true, ContentPosition::Center) => gummy::JustifyContent::SAFE_CENTER,
+        (true, ContentPosition::Start) => gummy::JustifyContent::SAFE_START,
+        (true, ContentPosition::End) => gummy::JustifyContent::SAFE_END,
+        (true, ContentPosition::FlexStart) => gummy::JustifyContent::SAFE_FLEX_START,
+        (true, ContentPosition::FlexEnd) => gummy::JustifyContent::SAFE_FLEX_END,
+        (false, ContentPosition::Center) => gummy::JustifyContent::CENTER,
+        (false, ContentPosition::Start) => gummy::JustifyContent::START,
+        (false, ContentPosition::End) => gummy::JustifyContent::END,
+        (false, ContentPosition::FlexStart) => gummy::JustifyContent::FLEX_START,
+        (false, ContentPosition::FlexEnd) => gummy::JustifyContent::FLEX_END,
+    }
+}
+
+pub fn css_align_content_distribution(
     value: &lightningcss::properties::align::ContentDistribution,
-) -> gummy::AlignContentKeyword {
+) -> gummy::AlignContent {
     use lightningcss::properties::align::ContentDistribution;
     match value {
-        ContentDistribution::SpaceBetween => gummy::AlignContentKeyword::SpaceBetween,
-        ContentDistribution::SpaceAround => gummy::AlignContentKeyword::SpaceAround,
-        ContentDistribution::SpaceEvenly => gummy::AlignContentKeyword::SpaceEvenly,
-        ContentDistribution::Stretch => gummy::AlignContentKeyword::Stretch,
+        ContentDistribution::SpaceBetween => gummy::AlignContent::SPACE_BETWEEN,
+        ContentDistribution::SpaceAround => gummy::AlignContent::SPACE_AROUND,
+        ContentDistribution::SpaceEvenly => gummy::AlignContent::SPACE_EVENLY,
+        ContentDistribution::Stretch => gummy::AlignContent::STRETCH,
+    }
+}
+
+pub fn css_justify_content_distribution(
+    value: &lightningcss::properties::align::ContentDistribution,
+) -> gummy::JustifyContent {
+    use lightningcss::properties::align::ContentDistribution;
+    match value {
+        ContentDistribution::SpaceBetween => gummy::JustifyContent::SPACE_BETWEEN,
+        ContentDistribution::SpaceAround => gummy::JustifyContent::SPACE_AROUND,
+        ContentDistribution::SpaceEvenly => gummy::JustifyContent::SPACE_EVENLY,
+        ContentDistribution::Stretch => gummy::JustifyContent::STRETCH,
     }
 }
 
@@ -1783,13 +1886,8 @@ pub fn css_align_content(value: &lightningcss::properties::align::AlignContent) 
     match value {
         AlignContent::Normal => gummy::AlignContent::NORMAL,
         AlignContent::BaselinePosition(_) => gummy::AlignContent::START,
-        AlignContent::ContentDistribution(value) => {
-            gummy::AlignContent { keyword: css_content_distribution(value), safety: gummy::AlignmentSafety::Unsafe }
-        }
-        AlignContent::ContentPosition { overflow, value } => gummy::AlignContent {
-            keyword: css_content_position(value),
-            safety: css_alignment_safety(overflow.as_ref()),
-        },
+        AlignContent::ContentDistribution(value) => css_align_content_distribution(value),
+        AlignContent::ContentPosition { overflow, value } => css_align_content_position(value, overflow.as_ref()),
     }
 }
 
@@ -1797,21 +1895,22 @@ pub fn css_justify_content(value: &lightningcss::properties::align::JustifyConte
     use lightningcss::properties::align::JustifyContent;
     match value {
         JustifyContent::Normal => gummy::JustifyContent::NORMAL,
-        JustifyContent::ContentDistribution(value) => {
-            gummy::JustifyContent { keyword: css_content_distribution(value), safety: gummy::AlignmentSafety::Unsafe }
+        JustifyContent::ContentDistribution(value) => css_justify_content_distribution(value),
+        JustifyContent::ContentPosition { overflow, value } => css_justify_content_position(value, overflow.as_ref()),
+        JustifyContent::Left { overflow } => {
+            if css_alignment_is_safe(overflow.as_ref()) {
+                gummy::JustifyContent::SAFE_START
+            } else {
+                gummy::JustifyContent::START
+            }
         }
-        JustifyContent::ContentPosition { overflow, value } => gummy::JustifyContent {
-            keyword: css_content_position(value),
-            safety: css_alignment_safety(overflow.as_ref()),
-        },
-        JustifyContent::Left { overflow } => gummy::JustifyContent {
-            keyword: gummy::AlignContentKeyword::Start,
-            safety: css_alignment_safety(overflow.as_ref()),
-        },
-        JustifyContent::Right { overflow } => gummy::JustifyContent {
-            keyword: gummy::AlignContentKeyword::End,
-            safety: css_alignment_safety(overflow.as_ref()),
-        },
+        JustifyContent::Right { overflow } => {
+            if css_alignment_is_safe(overflow.as_ref()) {
+                gummy::JustifyContent::SAFE_END
+            } else {
+                gummy::JustifyContent::END
+            }
+        }
     }
 }
 

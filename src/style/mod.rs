@@ -13,10 +13,7 @@ mod float;
 #[cfg(feature = "grid")]
 mod grid;
 
-pub use self::alignment::{
-    AlignContent, AlignContentKeyword, AlignItems, AlignItemsKeyword, AlignSelf, AlignmentSafety, JustifyContent,
-    JustifyItems, JustifySelf,
-};
+pub use self::alignment::{AlignContent, AlignItems, AlignSelf, JustifyContent, JustifyItems, JustifySelf};
 pub use self::available_space::AvailableSpace;
 pub use self::compact_length::CompactLength;
 pub use self::dimension::{Dimension, LengthPercentage, LengthPercentageAuto};
@@ -506,16 +503,16 @@ pub struct Style<S: CheapCloneStr = DefaultCheapStr> {
     /// How this node should be aligned in the cross/block axis
     /// [`AlignSelf::AUTO`] falls back to the parent's [`AlignItems`]
     #[cfg(any(feature = "flexbox", feature = "grid"))]
-    #[cfg_attr(feature = "serde", serde(deserialize_with = "alignment::deserialize_align_items_or_auto"))]
+    #[cfg_attr(feature = "serde", serde(deserialize_with = "alignment::deserialize_align_self_or_auto"))]
     pub align_self: AlignSelf,
     /// How this node's children should be aligned in the inline axis
     #[cfg(feature = "grid")]
-    #[cfg_attr(feature = "serde", serde(deserialize_with = "alignment::deserialize_align_items_or_normal"))]
+    #[cfg_attr(feature = "serde", serde(deserialize_with = "alignment::deserialize_justify_items_or_normal"))]
     pub justify_items: JustifyItems,
     /// How this node should be aligned in the inline axis
     /// [`JustifySelf::AUTO`] falls back to the parent's [`JustifyItems`]
     #[cfg(feature = "grid")]
-    #[cfg_attr(feature = "serde", serde(deserialize_with = "alignment::deserialize_align_items_or_auto"))]
+    #[cfg_attr(feature = "serde", serde(deserialize_with = "alignment::deserialize_justify_self_or_auto"))]
     pub justify_self: JustifySelf,
     /// How should content contained within this item be aligned in the cross/block axis
     #[cfg(any(feature = "flexbox", feature = "grid", feature = "block_layout"))]
@@ -523,7 +520,7 @@ pub struct Style<S: CheapCloneStr = DefaultCheapStr> {
     pub align_content: AlignContent,
     /// How should content contained within this item be aligned in the main/inline axis
     #[cfg(any(feature = "flexbox", feature = "grid"))]
-    #[cfg_attr(feature = "serde", serde(deserialize_with = "alignment::deserialize_align_content_or_normal"))]
+    #[cfg_attr(feature = "serde", serde(deserialize_with = "alignment::deserialize_justify_content_or_normal"))]
     pub justify_content: JustifyContent,
     /// How large should the gaps between items in a grid or flex container be?
     #[cfg(any(feature = "flexbox", feature = "grid"))]
@@ -1003,7 +1000,9 @@ impl<T: FlexboxItemStyle> FlexboxItemStyle for &'_ T {
         (*self).align_self()
     }
     #[inline(always)]
-    fn order(&self) -> i32 { (*self).order() }
+    fn order(&self) -> i32 {
+        (*self).order()
+    }
 }
 
 #[cfg(feature = "grid")]
@@ -1357,13 +1356,13 @@ mod tests {
         assert_type_size::<Rect<LengthPercentageAuto>>(32);
         assert_type_size::<Rect<Dimension>>(32);
 
-        // Alignment — `AlignContent` and `AlignItems` are structs of two `#[repr(u8)]` enums
-        // (alignment keyword + safety modifier).
-        assert_type_size::<AlignContentKeyword>(1);
-        assert_type_size::<AlignItemsKeyword>(1);
-        assert_type_size::<AlignmentSafety>(1);
-        assert_type_size::<AlignContent>(2);
-        assert_type_size::<AlignItems>(2);
+        // Each alignment is a simple POD enum.
+        assert_type_size::<AlignContent>(1);
+        assert_type_size::<JustifyContent>(1);
+        assert_type_size::<AlignItems>(1);
+        assert_type_size::<JustifyItems>(1);
+        assert_type_size::<AlignSelf>(1);
+        assert_type_size::<JustifySelf>(1);
 
         // Flexbox Container
         assert_type_size::<FlexDirection>(1);
@@ -1381,12 +1380,12 @@ mod tests {
         assert_type_size::<GridTemplateComponent<String>>(56);
         assert_type_size::<GridPlacement<String>>(32);
         assert_type_size::<Line<GridPlacement<String>>>(64);
-        assert_type_size::<Style<String>>(552);
+        assert_type_size::<Style<String>>(544);
 
         // String-type dependent (Arc<str>)
         assert_type_size::<GridTemplateComponent<Arc<str>>>(56);
         assert_type_size::<GridPlacement<Arc<str>>>(24);
         assert_type_size::<Line<GridPlacement<Arc<str>>>>(48);
-        assert_type_size::<Style<Arc<str>>>(520);
+        assert_type_size::<Style<Arc<str>>>(512);
     }
 }

@@ -1,13 +1,13 @@
 //! Implements the track sizing algorithm
 //! <https://www.w3.org/TR/css-grid-1/#layout-algorithm>
 use super::types::{GridItem, GridTrack, TrackCounts};
+use crate::CompactLength;
 use crate::geometry::{AbstractAxis, Line, Size};
-use crate::style::{AlignContent, AlignContentKeyword, AlignSelf, AvailableSpace};
+use crate::style::{AlignContent, AlignSelf, AvailableSpace, JustifyContent};
 use crate::style_helpers::GummyMinContent;
 use crate::tree::{LayoutPartialTree, LayoutPartialTreeExt, SizingMode};
-use crate::util::sys::{f32_max, f32_min, Vec};
+use crate::util::sys::{Vec, f32_max, f32_min};
 use crate::util::{MaybeMath, ResolveOrZero};
-use crate::CompactLength;
 use core::cmp::Ordering;
 
 /// Takes an axis, and a list of grid items sorted firstly by whether they cross a flex track
@@ -177,12 +177,54 @@ pub(super) fn cmp_by_cross_flex_then_span_then_start(
     }
 }
 
-/// When applying the track sizing algorithm and estimating the size in the other axis for content sizing items
-/// we should take into account align-content/justify-content if both the grid container and all items in the
-/// other axis have definite sizes. This function computes such a per-gutter additional size adjustment.
+/// Return outer- and inner-gutter weights for `align-content`.
 #[inline(always)]
-pub(super) fn compute_alignment_gutter_adjustment(
-    alignment: AlignContent,
+pub(super) fn align_content_gutter_weights(alignment: AlignContent) -> (u8, u8) {
+    match alignment {
+        AlignContent::Start
+        | AlignContent::FlexStart
+        | AlignContent::End
+        | AlignContent::FlexEnd
+        | AlignContent::Center
+        | AlignContent::SafeStart
+        | AlignContent::SafeEnd
+        | AlignContent::SafeFlexStart
+        | AlignContent::SafeFlexEnd
+        | AlignContent::SafeCenter => (1, 0),
+        AlignContent::Stretch => (0, 0),
+        AlignContent::SpaceBetween => (0, 1),
+        AlignContent::SpaceAround => (1, 2),
+        AlignContent::SpaceEvenly => (1, 1),
+        AlignContent::Normal => unreachable!("normal align-content is resolved before grid track sizing"),
+    }
+}
+
+/// Return outer- and inner-gutter weights for `justify-content`.
+#[inline(always)]
+pub(super) fn justify_content_gutter_weights(alignment: JustifyContent) -> (u8, u8) {
+    match alignment {
+        JustifyContent::Start
+        | JustifyContent::FlexStart
+        | JustifyContent::End
+        | JustifyContent::FlexEnd
+        | JustifyContent::Center
+        | JustifyContent::SafeStart
+        | JustifyContent::SafeEnd
+        | JustifyContent::SafeFlexStart
+        | JustifyContent::SafeFlexEnd
+        | JustifyContent::SafeCenter => (1, 0),
+        JustifyContent::Stretch => (0, 0),
+        JustifyContent::SpaceBetween => (0, 1),
+        JustifyContent::SpaceAround => (1, 2),
+        JustifyContent::SpaceEvenly => (1, 1),
+        JustifyContent::Normal => unreachable!("normal justify-content is resolved before grid track sizing"),
+    }
+}
+
+/// Compute the extra size allocated to each inner gutter by content alignment.
+#[inline(always)]
+fn compute_alignment_gutter_adjustment(
+    (outer_gutter_weight, inner_gutter_weight): (u8, u8),
     axis_inner_node_size: Option<f32>,
     get_track_size_estimate: impl Fn(&GridTrack, Option<f32>) -> Option<f32>,
     tracks: &[GridTrack],
@@ -190,39 +232,6 @@ pub(super) fn compute_alignment_gutter_adjustment(
     if tracks.len() <= 1 {
         return 0.0;
     }
-
-    // As items never cross the outermost gutters in a grid, we can simplify our calculations by
-    // treating Start and End the same. The safety modifier doesn't influence gutter weight;
-    // overflow fallback is handled when offsets are computed.
-    let outer_gutter_weight = match alignment.keyword() {
-        AlignContentKeyword::Start
-        | AlignContentKeyword::FlexStart
-        | AlignContentKeyword::End
-        | AlignContentKeyword::FlexEnd
-        | AlignContentKeyword::Center => 1,
-        AlignContentKeyword::Stretch => 0,
-        AlignContentKeyword::SpaceBetween => 0,
-        AlignContentKeyword::SpaceAround => 1,
-        AlignContentKeyword::SpaceEvenly => 1,
-        AlignContentKeyword::Normal => {
-            unreachable!("normal content alignment is resolved before grid track sizing")
-        }
-    };
-
-    let inner_gutter_weight = match alignment.keyword() {
-        AlignContentKeyword::FlexStart
-        | AlignContentKeyword::Start
-        | AlignContentKeyword::FlexEnd
-        | AlignContentKeyword::End
-        | AlignContentKeyword::Center
-        | AlignContentKeyword::Stretch => 0,
-        AlignContentKeyword::SpaceBetween => 1,
-        AlignContentKeyword::SpaceAround => 2,
-        AlignContentKeyword::SpaceEvenly => 1,
-        AlignContentKeyword::Normal => {
-            unreachable!("normal content alignment is resolved before grid track sizing")
-        }
-    };
 
     if inner_gutter_weight == 0 {
         return 0.0;
@@ -281,8 +290,8 @@ pub(super) fn track_sizing_algorithm<Tree: LayoutPartialTree>(
     axis: AbstractAxis,
     axis_min_size: Option<f32>,
     axis_max_size: Option<f32>,
-    axis_alignment: AlignContent,
-    other_axis_alignment: AlignContent,
+    axis_alignment_is_stretch: bool,
+    other_axis_alignment_gutter_weights: (u8, u8),
     available_grid_space: Size<AvailableSpace>,
     inner_node_size: Size<Option<f32>>,
     axis_tracks: &mut [GridTrack],
@@ -312,7 +321,7 @@ pub(super) fn track_sizing_algorithm<Tree: LayoutPartialTree>(
     // Compute an additional amount to add to each spanned gutter when computing item's estimated size in the
     // in the opposite axis based on the alignment, container size, and estimated track sizes in that axis
     let gutter_alignment_adjustment = compute_alignment_gutter_adjustment(
-        other_axis_alignment,
+        other_axis_alignment_gutter_weights,
         inner_node_size.get(axis.other()),
         |track, basis| get_track_size_estimate(track, basis, tree),
         other_axis_tracks,
@@ -368,7 +377,7 @@ pub(super) fn track_sizing_algorithm<Tree: LayoutPartialTree>(
 
     // 11.8. Stretch auto Tracks
     // This step expands tracks that have an auto max track sizing function by dividing any remaining positive, definite free space equally amongst them.
-    if axis_alignment == AlignContent::STRETCH {
+    if axis_alignment_is_stretch {
         stretch_auto_tracks(axis_tracks, axis_min_size, axis_available_space_for_expansion);
     }
 }

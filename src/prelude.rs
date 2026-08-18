@@ -3,13 +3,12 @@
 pub use crate::{
     geometry::{Line, Rect, Size},
     style::{
-        AlignContent, AlignContentKeyword, AlignItems, AlignItemsKeyword, AlignSelf, AlignmentSafety, AvailableSpace,
-        BoxSizing, CompactLength, Dimension, Display, JustifyContent, JustifyItems, JustifySelf, LengthPercentage,
-        LengthPercentageAuto, Position, Style,
+        AlignContent, AlignItems, AlignSelf, AvailableSpace, BoxSizing, CompactLength, Dimension, Display,
+        JustifyContent, JustifyItems, JustifySelf, LengthPercentage, LengthPercentageAuto, Position, Style,
     },
     style_helpers::{
-        auto, fit_content, length, max_content, min_content, percent, zero, FromFr, FromLength, FromPercent, GummyAuto,
-        GummyFitContent, GummyMaxContent, GummyMinContent, GummyZero,
+        FromFr, FromLength, FromPercent, GummyAuto, GummyFitContent, GummyMaxContent, GummyMinContent, GummyZero, auto,
+        fit_content, length, max_content, min_content, percent, zero,
     },
     tree::{Layout, LayoutPartialTree, NodeId, PrintTree, RoundTree, TraversePartialTree, TraverseTree},
 };
@@ -24,7 +23,7 @@ pub use crate::style::{
 };
 #[cfg(feature = "grid")]
 pub use crate::style_helpers::{
-    evenly_sized_tracks, flex, fr, line, minmax, repeat, span, GummyGridLine, GummyGridSpan,
+    GummyGridLine, GummyGridSpan, evenly_sized_tracks, flex, fr, line, minmax, repeat, span,
 };
 
 #[cfg(feature = "gummy_tree")]

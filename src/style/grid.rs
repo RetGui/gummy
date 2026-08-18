@@ -4,7 +4,7 @@ use super::{
     JustifyItems, JustifySelf, LengthPercentage, LengthPercentageAuto, Style,
 };
 use crate::compute::grid::{GridCoordinate, GridLine, OriginZeroLine};
-use crate::geometry::{AbsoluteAxis, AbstractAxis, Line, MinMax, Size};
+use crate::geometry::{AbsoluteAxis, Line, MinMax, Size};
 use crate::style_helpers::*;
 use crate::sys::{DefaultCheapStr, Vec};
 use core::cmp::{max, min};
@@ -12,7 +12,7 @@ use core::fmt::Debug;
 
 #[cfg(feature = "parse")]
 use crate::util::parse::{
-    from_str_from_css, parse_css_str_entirely, CssParseResult, FromCss, ParseError, Parser, Token,
+    CssParseResult, FromCss, ParseError, Parser, Token, from_str_from_css, parse_css_str_entirely,
 };
 
 /// Defines a grid area
@@ -222,19 +222,6 @@ pub trait GridContainerStyle: CoreStyle {
         match axis {
             AbsoluteAxis::Horizontal => self.grid_template_columns(),
             AbsoluteAxis::Vertical => self.grid_template_rows(),
-        }
-    }
-
-    /// Get a grid container's align-content or justify-content alignment depending on the axis passed
-    #[inline(always)]
-    fn grid_align_content(&self, axis: AbstractAxis) -> AlignContent {
-        let alignment = match axis {
-            AbstractAxis::Inline => self.justify_content(),
-            AbstractAxis::Block => self.align_content(),
-        };
-        match alignment.keyword() {
-            super::AlignContentKeyword::Normal => AlignContent::STRETCH,
-            _ => alignment,
         }
     }
 }

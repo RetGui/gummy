@@ -1,13 +1,13 @@
 //! Computes the CSS block layout algorithm in the case that the block container being laid out contains only block-level boxes
 use crate::geometry::{Line, Point, Rect, Size};
-use crate::style::{AlignContentKeyword, AvailableSpace, CoreStyle, LengthPercentageAuto, Overflow, Position};
+use crate::style::{AlignContent, AvailableSpace, CoreStyle, LengthPercentageAuto, Overflow, Position};
 use crate::style_helpers::GummyMaxContent;
 use crate::tree::{CollapsibleMarginSet, Layout, LayoutInput, LayoutOutput, RunMode, SizingMode};
 use crate::tree::{LayoutPartialTree, LayoutPartialTreeExt, NodeId};
-use crate::util::debug::debug_log;
-use crate::util::sys::f32_max;
-use crate::util::sys::Vec;
 use crate::util::MaybeMath;
+use crate::util::debug::debug_log;
+use crate::util::sys::Vec;
+use crate::util::sys::f32_max;
 use crate::util::{MaybeResolve, ResolveOrZero};
 use crate::{
     BlockContainerStyle, BlockItemStyle, BoxGenerationMode, BoxSizing, Direction, LayoutBlockContainer, RequestedAxis,
@@ -272,7 +272,7 @@ impl BlockContext<'_> {
     }
 }
 
-use super::common::alignment::{apply_alignment_fallback, compute_alignment_offset};
+use super::common::alignment::{apply_align_content_fallback, compute_align_content_offset};
 #[cfg(feature = "content_size")]
 use super::common::content_size::compute_content_size_contribution;
 
@@ -619,16 +619,16 @@ fn compute_inner(
     // For block layout the entire stack of in-flow children is treated as a single alignment
     // subject. That means distribution keywords (`space-between`, `space-around`,
     // `space-evenly`, `stretch`) must invoke the single-subject fallback unconditionally —
-    // which is what passing `num_items = 1` to `apply_alignment_fallback` does. The whole
+    // which is what passing `num_items = 1` to `apply_align_content_fallback` does. The whole
     // group then shifts by one offset, with zero inter-item gap.
-    if align_content.keyword() != AlignContentKeyword::Normal {
+    if align_content != AlignContent::NORMAL {
         let container_inner_height = container_outer_height - resolved_content_box_inset.vertical_axis_sum();
         let inflow_content_height = intrinsic_outer_height - resolved_content_box_inset.vertical_axis_sum();
         let free_space = container_inner_height - inflow_content_height;
         let any_in_flow = items.iter().any(|item| item.final_layout.is_some());
         if any_in_flow {
-            let keyword = apply_alignment_fallback(free_space, 1, align_content);
-            let group_offset = compute_alignment_offset(free_space, 1, 0.0, keyword, false, true);
+            let alignment = apply_align_content_fallback(free_space, 1, align_content);
+            let group_offset = compute_align_content_offset(free_space, 1, 0.0, alignment, false, true);
             first_baseline = first_baseline.map(|baseline| baseline + group_offset);
             for item in items.iter_mut() {
                 if let Some(layout) = item.final_layout.as_mut() {
@@ -2000,7 +2000,7 @@ fn resolve_absolutely_positioned_replaced_box_properties_horizontal(
                 min_width,
                 max_width,
             )
-                .size
+            .size
         } else if intrinsic_width.is_some() {
             // Otherwise, if 'width' has a computed value of 'auto', and the element has an intrinsic width,
             // then that intrinsic width is the used value of 'width'.
